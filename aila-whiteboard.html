@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AILA Whiteboard</title>
+<!-- Rough.js: Excalidraw'ın el-çizimi (eskiz) görünümünü sağlayan kütüphane -->
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<style>
+  :root {
+    --bg: #f7f7f8;
+    --panel: #ffffff;
+    --border: #e4e4e7;
+    --accent: #6741d9;
+    --accent-soft: #ede9fe;
+    --text: #1e1e1e;
+    --muted: #8a8a90;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { background: var(--bg); color: var(--text); user-select: none; -webkit-user-select: none; }
+
+  canvas { display: block; position: absolute; inset: 0; touch-action: none; }
+  #canvas.pan { cursor: grab; }
+  #canvas.panning { cursor: grabbing; }
+
+  /* ---- Üst araç çubuğu ---- */
+  .toolbar {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 4px; padding: 6px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,.08);
+    z-index: 10;
+  }
+  .tool {
+    width: 40px; height: 40px; border: none; border-radius: 8px;
+    background: transparent; cursor: pointer; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text); position: relative;
+  }
+  .tool:hover { background: #f1f0ff; }
+  .tool.active { background: var(--accent-soft); color: var(--accent); }
+  .tool small {
+    position: absolute; bottom: 1px; right: 3px; font-size: 9px; color: var(--muted);
+  }
+  .sep { width: 1px; background: var(--border); margin: 4px 2px; }
+
+  /* ---- Sol özellik paneli ---- */
+  .panel {
+    position: fixed; top: 70px; left: 12px; width: 200px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,.08);
+    padding: 12px; z-index: 10; display: none; flex-direction: column; gap: 12px;
+    font-size: 12px;
+  }
+  .panel.show { display: flex; }
+  .panel .row { display: flex; flex-direction: column; gap: 6px; }
+  .panel label { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: .04em; }
+  .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+  .swatch { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(0,0,0,.1); cursor: pointer; }
+  .swatch.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .seg { display: flex; gap: 4px; }
+  .seg button {
+    flex: 1; border: 1px solid var(--border); background: #fff; border-radius: 6px;
+    padding: 6px 0; cursor: pointer; font-size: 12px;
+  }
+  .seg button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+  /* ---- Alt sağ: zoom ---- */
+  .zoombar {
+    position: fixed; bottom: 12px; left: 12px; display: flex; gap: 4px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.08); z-index: 10; overflow: hidden;
+  }
+  .zoombar button { width: 34px; height: 34px; border: none; background: transparent; cursor: pointer; font-size: 16px; }
+  .zoombar button:hover { background: #f1f0ff; }
+  .zoombar .lvl { min-width: 52px; font-size: 12px; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+
+  /* ---- Alt sağ: dosya işlemleri ---- */
+  .filebar {
+    position: fixed; bottom: 12px; right: 12px; display: flex; gap: 4px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.08); z-index: 10; padding: 4px;
+  }
+  .filebar button { height: 34px; padding: 0 12px; border: none; background: transparent; cursor: pointer; font-size: 12px; border-radius: 6px; color: var(--text); }
+  .filebar button:hover { background: #f1f0ff; }
+
+  .brand {
+    position: fixed; top: 16px; left: 16px; z-index: 5;
+    font-weight: 800; letter-spacing: .06em; color: var(--accent); font-size: 15px;
+  }
+  .hint { position: fixed; bottom: 56px; left: 12px; z-index: 5; font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <div class="brand">AILA ✎</div>
+
+  <div class="toolbar" id="toolbar">
+    <button class="tool" data-tool="pan"       title="El / Kaydır (Boşluk)">✋</button>
+    <div class="sep"></div>
+    <button class="tool active" data-tool="select" title="Seçim (V)">↖<small>V</small></button>
+    <button class="tool" data-tool="rectangle" title="Dikdörtgen (R)">▭<small>R</small></button>
+    <button class="tool" data-tool="diamond"   title="Elmas (D)">◇<small>D</small></button>
+    <button class="tool" data-tool="ellipse"   title="Elips (O)">◯<small>O</small></button>
+    <button class="tool" data-tool="arrow"     title="Ok (A)">↗<small>A</small></button>
+    <button class="tool" data-tool="line"      title="Çizgi (L)">╱<small>L</small></button>
+    <button class="tool" data-tool="freedraw"  title="Kalem (P)">✏️<small>P</small></button>
+    <button class="tool" data-tool="text"      title="Metin (T)">A<small>T</small></button>
+    <button class="tool" data-tool="image"     title="Görsel Ekle (I)">🖼<small>I</small></button>
+    <div class="sep"></div>
+    <button class="tool" data-tool="eraser"    title="Sil (E)">🧽<small>E</small></button>
+  </div>
+
+  <div class="panel" id="panel">
+    <div class="row">
+      <label>Çizgi Rengi</label>
+      <div class="swatches" id="strokeSwatches"></div>
+    </div>
+    <div class="row">
+      <label>Dolgu</label>
+      <div class="swatches" id="fillSwatches"></div>
+    </div>
+    <div class="row">
+      <label>Kalınlık</label>
+      <div class="seg" id="strokeWidth">
+        <button data-w="1">İnce</button>
+        <button data-w="2" class="active">Orta</button>
+        <button data-w="4">Kalın</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>Kabalık (eskiz)</label>
+      <div class="seg" id="roughness">
+        <button data-r="0">Düz</button>
+        <button data-r="1" class="active">Eskiz</button>
+        <button data-r="2">Fazla</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="zoombar">
+    <button id="zoomOut">−</button>
+    <div class="lvl" id="zoomLvl">100%</div>
+    <button id="zoomIn">+</button>
+    <button id="zoomReset" title="Sıfırla">⤢</button>
+  </div>
+
+  <div class="filebar">
+    <button id="btnClear">🗑 Temizle</button>
+    <button id="btnSave">💾 Kaydet</button>
+    <button id="btnLoad">📂 Yükle</button>
+    <button id="btnPng">🖼 PNG</button>
+    <input type="file" id="fileInput" accept=".excalidraw,.json" style="display:none">
+  </div>
+  <input type="file" id="imageInput" accept="image/*" style="display:none">
+
+  <div class="hint">Tekerlek: yakınlaş • Boşluk+sürükle: kaydır • Ctrl+C/V kopyala-yapıştır • Ctrl+D çoğalt • Ctrl+G grupla • Üstteki daire: döndür • Köşeler: boyutlandır (Shift=oran/açı)</div>
+
+  <canvas id="canvas"></canvas>
+
+<script>
+/* =========================================================================
+   AILA WHITEBOARD — Excalidraw mantığının sadeleştirilmiş uygulaması
+   Katmanlar:
+   1) STATE      : elements[] + appState (zoom/scroll/tool/renk)
+   2) COORDS     : scene <-> screen dönüşümü (sonsuz tuval)
+   3) RENDER     : Rough.js ile her frame'de elements[] çizimi
+   4) INTERACT   : araca göre fare state machine'i
+   5) FILE       : JSON kaydet/yükle, PNG dışa aktar
+   ========================================================================= */
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let rc = null; // rough canvas
+const imageCache = {}; // id -> HTMLImageElement (base64'ten çözülmüş)
+
+/* ---------- 1) STATE ---------- */
+const state = {
+  elements: [],                 // tüm çizim nesneleri
+  appState: {
+    tool: 'select',
+    scrollX: 0, scrollY: 0, zoom: 1,   // kamera
+    strokeColor: '#1e1e1e',
+    backgroundColor: 'transparent',
+    strokeWidth: 2,
+    roughness: 1,
+    selectedIds: new Set(),
+  },
+};
+let history = [];               // basit undo yığını (elements snapshot)
+
+function pushHistory() {
+  history.push(JSON.stringify(state.elements));
+  if (history.length > 100) history.shift();
+}
+function undo() {
+  if (!history.length) return;
+  state.elements = JSON.parse(history.pop());
+  state.appState.selectedIds.clear();
+  render();
+}
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+const seed = () => Math.floor(Math.random() * 2 ** 31);
+
+/* ---------- 2) COORDS: scene <-> screen ----------
+   Excalidraw'ın sonsuz tuval sihri buradadır.
+   Eleman verileri her zaman "scene" (dünya) koordinatındadır ve hiç değişmez.
+   Ekrana çizerken kamera (scroll + zoom) uygulanır. */
+function toScene(clientX, clientY) {
+  const { scrollX, scrollY, zoom } = state.appState;
+  return { x: (clientX - scrollX) / zoom, y: (clientY - scrollY) / zoom };
+}
+
+/* ---------- 3) RENDER ---------- */
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = innerWidth * dpr;
+  canvas.height = innerHeight * dpr;
+  canvas.style.width = innerWidth + 'px';
+  canvas.style.height = innerHeight + 'px';
+  rc = rough.canvas(canvas);
+  render();
+}
+
+function render() {
+  const dpr = window.devicePixelRatio || 1;
+  const { scrollX, scrollY, zoom } = state.appState;
+
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, innerWidth, innerHeight);
+
+  // sonsuz nokta ızgarası (referans hissi)
+  drawGrid(scrollX, scrollY, zoom);
+
+  // kamerayı uygula: önce kaydır, sonra ölçekle
+  ctx.translate(scrollX, scrollY);
+  ctx.scale(zoom, zoom);
+
+  for (const el of state.elements) drawElement(el);
+
+  // seçim çerçeveleri
+  ctx.restore();
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawSelection();
+  ctx.restore();
+
+  updateZoomLabel();
+}
+
+function drawGrid(scrollX, scrollY, zoom) {
+  const gap = 24 * zoom;
+  if (gap < 8) return;
+  ctx.fillStyle = '#00000010';
+  const ox = scrollX % gap, oy = scrollY % gap;
+  for (let x = ox; x < innerWidth; x += gap)
+    for (let y = oy; y < innerHeight; y += gap)
+      ctx.fillRect(x, y, 1, 1);
+}
+
+// Rough.js seçenekleri: her elemanda aynı 'seed' -> titreklik sabit kalır
+function roughOpts(el) {
+  return {
+    stroke: el.strokeColor,
+    strokeWidth: el.strokeWidth,
+    roughness: el.roughness,
+    seed: el.seed,
+    fill: el.backgroundColor === 'transparent' ? undefined : el.backgroundColor,
+    fillStyle: 'hachure',
+    hachureGap: 6,
+    bowing: 1,
+  };
+}
+
+function drawElement(el) {
+  // döndürme: elemanı kendi merkezinde döndürerek çiz
+  const rot = el.angle || 0;
+  if (rot) {
+    const b = bounds(el);
+    ctx.save();
+    ctx.translate(b.x + b.w/2, b.y + b.h/2);
+    ctx.rotate(rot);
+    ctx.translate(-(b.x + b.w/2), -(b.y + b.h/2));
+    drawElementRaw(el);
+    ctx.restore();
+    return;
+  }
+  drawElementRaw(el);
+}
+
+function drawElementRaw(el) {
+  switch (el.type) {
+    case 'rectangle':
+      rc.rectangle(el.x, el.y, el.width, el.height, roughOpts(el)); break;
+    case 'ellipse':
+      rc.ellipse(el.x + el.width/2, el.y + el.height/2, el.width, el.height, roughOpts(el)); break;
+    case 'diamond': {
+      const {x,y,width:w,height:h} = el;
+      rc.polygon([[x+w/2,y],[x+w,y+h/2],[x+w/2,y+h],[x,y+h/2]], roughOpts(el)); break;
+    }
+    case 'line':
+      rc.line(el.x, el.y, el.x+el.width, el.y+el.height, roughOpts(el)); break;
+    case 'arrow': {
+      const x2 = el.x+el.width, y2 = el.y+el.height;
+      rc.line(el.x, el.y, x2, y2, roughOpts(el));
+      // ok başı
+      const ang = Math.atan2(el.height, el.width), len = 14;
+      rc.line(x2, y2, x2 - len*Math.cos(ang-0.4), y2 - len*Math.sin(ang-0.4), roughOpts(el));
+      rc.line(x2, y2, x2 - len*Math.cos(ang+0.4), y2 - len*Math.sin(ang+0.4), roughOpts(el));
+      break;
+    }
+    case 'freedraw':
+      if (el.points && el.points.length > 1)
+        rc.linearPath(el.points.map(p => [el.x+p[0], el.y+p[1]]), roughOpts(el));
+      break;
+    case 'image': {
+      const img = imageCache[el.id];
+      if (img && img.complete) {
+        ctx.drawImage(img, el.x, el.y, el.width, el.height);
+      } else {
+        // henüz yüklenmedi: yer tutucu çerçeve
+        ctx.strokeStyle = '#bbb'; ctx.setLineDash([4,4]);
+        ctx.strokeRect(el.x, el.y, el.width, el.height); ctx.setLineDash([]);
+      }
+      break;
+    }
+    case 'text':
+      ctx.font = `${el.fontSize}px "Comic Sans MS", "Segoe Print", cursive`;
+      ctx.fillStyle = el.strokeColor;
+      ctx.textBaseline = 'top';
+      (el.text || '').split('\n').forEach((line, i) =>
+        ctx.fillText(line, el.x, el.y + i * el.fontSize * 1.25));
+      break;
+  }
+}
+
+/* eleman sınır kutusu (seçim/isabet testi için) */
+function bounds(el) {
+  let x = el.x, y = el.y, w = el.width, h = el.height;
+  if (el.type === 'text') {
+    ctx.font = `${el.fontSize}px cursive`;
+    const lines = (el.text || '').split('\n');
+    w = Math.max(...lines.map(l => ctx.measureText(l).width), 10);
+    h = lines.length * el.fontSize * 1.25;
+  }
+  // negatif boyutları normalize et
+  if (w < 0) { x += w; w = -w; }
+  if (h < 0) { y += h; h = -h; }
+  return { x, y, w, h };
+}
+
+/* seçili elemanların ortak sınır kutusu (scene koordinatı) */
+function selectionBBox() {
+  const ids = state.appState.selectedIds;
+  if (!ids.size) return null;
+  let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+  for (const id of ids) {
+    const el = state.elements.find(e => e.id === id); if (!el) continue;
+    const b = bounds(el);
+    minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x+b.w); maxY = Math.max(maxY, b.y+b.h);
+  }
+  if (minX === Infinity) return null;
+  return { x:minX, y:minY, w:maxX-minX, h:maxY-minY };
+}
+
+/* 8 tutamaç + döndürme sapının EKRAN koordinatları.
+   Döndürme sapı üstte, kutunun 24px yukarısında. */
+const HANDLE = 9; // ekran px
+function handlePositions() {
+  const bb = selectionBBox(); if (!bb) return null;
+  const { zoom, scrollX, scrollY } = state.appState;
+  const x = bb.x*zoom+scrollX, y = bb.y*zoom+scrollY, w = bb.w*zoom, h = bb.h*zoom;
+  const mx = x + w/2, my = y + h/2;
+  return {
+    box: { x, y, w, h },
+    handles: {
+      nw:{x,y}, n:{x:mx,y}, ne:{x:x+w,y},
+      w:{x,y:my},           e:{x:x+w,y:my},
+      sw:{x,y:y+h}, s:{x:mx,y:y+h}, se:{x:x+w,y:y+h},
+    },
+    rotate: { x: mx, y: y - 24 },
+  };
+}
+
+function drawSelection() {
+  const hp = handlePositions();
+  if (!hp) return;
+  const { box, handles, rotate } = hp;
+
+  ctx.save();
+  ctx.strokeStyle = '#6741d9'; ctx.fillStyle = '#fff'; ctx.lineWidth = 1;
+
+  // çerçeve
+  ctx.setLineDash([4,4]);
+  ctx.strokeRect(box.x, box.y, box.w, box.h);
+  ctx.setLineDash([]);
+
+  // döndürme sapı (çizgi + daire)
+  ctx.beginPath();
+  ctx.moveTo(box.x + box.w/2, box.y);
+  ctx.lineTo(rotate.x, rotate.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(rotate.x, rotate.y, 5, 0, Math.PI*2);
+  ctx.fill(); ctx.stroke();
+
+  // 8 boyutlandırma tutamacı
+  for (const k in handles) {
+    const p = handles[k];
+    ctx.fillRect(p.x - HANDLE/2, p.y - HANDLE/2, HANDLE, HANDLE);
+    ctx.strokeRect(p.x - HANDLE/2, p.y - HANDLE/2, HANDLE, HANDLE);
+  }
+  ctx.restore();
+}
+
+/* bir noktanın [a,b] doğru parçasına uzaklığı (isabet testi için) */
+function distToSegment(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx*dx + dy*dy;
+  if (len2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  let t = ((p.x - a.x)*dx + (p.y - a.y)*dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t*dx), p.y - (a.y + t*dy));
+}
+
+/* isabet testi: verilen scene noktası elemanın üstünde mi?
+   Kapalı şekiller (kutu/elips/elmas) TÜM gövdeden seçilir — rahat seçim için.
+   Çizgi/ok/serbest çizim yakınlıktan seçilir.
+   'tol' zoom'a göre büyür ve minimum bir taban değere sahiptir. */
+function hitTest(pt) {
+  // tolerans: uzaklaşınca da, çok yakınlaşınca da tıklaması kolay olsun
+  const tol = Math.max(6, 12 / state.appState.zoom);
+  for (let i = state.elements.length - 1; i >= 0; i--) {
+    const el = state.elements[i];
+    if (hitElement(el, pt, tol)) return el;
+  }
+  return null;
+}
+
+function hitElement(el, pt, tol) {
+  const b = bounds(el);
+  // önce hızlı ret: genişletilmiş kutunun tamamen dışındaysa atla
+  if (pt.x < b.x - tol || pt.x > b.x + b.w + tol ||
+      pt.y < b.y - tol || pt.y > b.y + b.h + tol) return false;
+
+  switch (el.type) {
+    case 'image':
+    case 'text':
+    case 'rectangle':
+    case 'diamond':
+      // tüm gövde tıklanabilir (kutu testi zaten geçti). İçi boş olsa bile.
+      return true;
+
+    case 'ellipse': {
+      // elips gövdesi + tol payı (köşe boşlukları hariç tutulur ama pay geniş)
+      const cx = b.x + b.w/2, cy = b.y + b.h/2;
+      const rx = b.w/2 + tol, ry = b.h/2 + tol;
+      return ((pt.x-cx)/rx)**2 + ((pt.y-cy)/ry)**2 <= 1;
+    }
+
+    case 'line':
+    case 'arrow': {
+      const t = tol + (el.strokeWidth || 1); // kalın çizgi = daha geniş isabet
+      return distToSegment(pt, {x: el.x, y: el.y},
+                               {x: el.x + el.width, y: el.y + el.height}) <= t;
+    }
+
+    case 'freedraw': {
+      const t = tol + (el.strokeWidth || 1);
+      const pts = el.points || [];
+      for (let i = 1; i < pts.length; i++)
+        if (distToSegment(pt,
+              {x: el.x+pts[i-1][0], y: el.y+pts[i-1][1]},
+              {x: el.x+pts[i][0],   y: el.y+pts[i][1]}) <= t) return true;
+      return false;
+    }
+    default: return true;
+  }
+}
+/* seçili elemanların derin kopyası — resize/rotate boyunca referans olur */
+function snapshotSelection() {
+  return [...state.appState.selectedIds]
+    .map(id => state.elements.find(e => e.id === id))
+    .filter(Boolean)
+    .map(el => ({ el, orig: JSON.parse(JSON.stringify(el)) }));
+}
+
+/* EKRAN noktasında hangi tutamaç var? 'rotate' | 'nw'.. | null döndürür. */
+function handleAtScreen(cx, cy) {
+  const hp = handlePositions(); if (!hp) return null;
+  const R = HANDLE; // yakalama yarıçapı
+  if (Math.hypot(cx - hp.rotate.x, cy - hp.rotate.y) <= R) return 'rotate';
+  for (const k in hp.handles) {
+    const p = hp.handles[k];
+    if (Math.abs(cx - p.x) <= R && Math.abs(cy - p.y) <= R) return k;
+  }
+  return null;
+}
+
+/* ---------- 4) INTERACT: fare state machine ---------- */
+let action = null; // {type, ...} çizim/taşıma/boyutlandırma sırasındaki geçici durum
+
+canvas.addEventListener('pointerdown', onDown);
+canvas.addEventListener('pointermove', onMove);
+window.addEventListener('pointerup', onUp);
+
+let spaceHeld = false;
+
+function onDown(e) {
+  const pt = toScene(e.clientX, e.clientY);
+  const tool = (spaceHeld || state.appState.tool === 'pan') ? 'pan' : state.appState.tool;
+  canvas.setPointerCapture(e.pointerId);
+
+  if (tool === 'pan') {
+    action = { type: 'pan', sx: e.clientX, sy: e.clientY,
+               ox: state.appState.scrollX, oy: state.appState.scrollY };
+    canvas.classList.add('panning');
+    return;
+  }
+
+  if (tool === 'eraser') {
+    const hit = hitTest(pt);
+    if (hit) { pushHistory(); state.elements = state.elements.filter(el => el !== hit); render(); }
+    action = { type: 'erasing' };
+    return;
+  }
+
+  if (tool === 'select') {
+    // 1) döndürme veya boyutlandırma tutamacı mı? (ekran koordinatı)
+    const h = handleAtScreen(e.clientX, e.clientY);
+    if (h === 'rotate') {
+      pushHistory();
+      const bb = selectionBBox();
+      const cx = bb.x + bb.w/2, cy = bb.y + bb.h/2;
+      action = { type:'rotate', cx, cy,
+                 startAng: Math.atan2(pt.y - cy, pt.x - cx),
+                 snapshot: snapshotSelection() };
+      return;
+    }
+    if (h) {
+      pushHistory();
+      action = { type:'resize', handle:h, bb: selectionBBox(), snapshot: snapshotSelection() };
+      return;
+    }
+
+    // 2) bir eleman mı?
+    const hit = hitTest(pt);
+    if (hit) {
+      // aynı grupta ise tüm grubu seç
+      const groupHits = hit.groupId
+        ? state.elements.filter(x => x.groupId === hit.groupId).map(x => x.id)
+        : [hit.id];
+      if (!state.appState.selectedIds.has(hit.id)) {
+        if (!e.shiftKey) state.appState.selectedIds.clear();
+        groupHits.forEach(id => state.appState.selectedIds.add(id));
+      }
+      pushHistory();
+      const els = [...state.appState.selectedIds].map(id => state.elements.find(x=>x.id===id)).filter(Boolean);
+      action = { type: 'move', start: pt, origins: els.map(el => ({ el, x: el.x, y: el.y })) };
+    } else {
+      if (!e.shiftKey) state.appState.selectedIds.clear();
+      action = { type: 'marquee', start: pt, cur: pt };
+    }
+    render();
+    return;
+  }
+
+  if (tool === 'text') {
+    spawnTextEditor(e.clientX, e.clientY, pt, null);
+    return;
+  }
+
+  // --- yeni şekil oluştur (rectangle/ellipse/diamond/arrow/line/freedraw) ---
+  pushHistory();
+  const el = {
+    id: uid(), type: tool, x: pt.x, y: pt.y, width: 0, height: 0, angle: 0,
+    strokeColor: state.appState.strokeColor,
+    backgroundColor: state.appState.backgroundColor,
+    strokeWidth: state.appState.strokeWidth,
+    roughness: state.appState.roughness,
+    seed: seed(),
+  };
+  if (tool === 'freedraw') el.points = [[0, 0]];
+  state.elements.push(el);
+  action = { type: 'create', el, start: pt };
+}
+
+// tutamaç -> imleç eşlemesi (boyutlandırma yönü hissi)
+const HANDLE_CURSOR = {
+  nw:'nwse-resize', se:'nwse-resize', ne:'nesw-resize', sw:'nesw-resize',
+  n:'ns-resize', s:'ns-resize', e:'ew-resize', w:'ew-resize', rotate:'grab',
+};
+
+function onMove(e) {
+  if (!action) {
+    // hareket yokken: seçim aracında tutamaç/nesne üstünde imleç ipucu ver
+    if (state.appState.tool === 'select' && !spaceHeld) {
+      const h = handleAtScreen(e.clientX, e.clientY);
+      if (h) canvas.style.cursor = HANDLE_CURSOR[h] || 'default';
+      else canvas.style.cursor = hitTest(toScene(e.clientX, e.clientY)) ? 'move' : 'default';
+    } else {
+      canvas.style.cursor = '';
+    }
+    return;
+  }
+  const pt = toScene(e.clientX, e.clientY);
+
+  switch (action.type) {
+    case 'pan': {
+      state.appState.scrollX = action.ox + (e.clientX - action.sx);
+      state.appState.scrollY = action.oy + (e.clientY - action.sy);
+      render(); break;
+    }
+    case 'create': {
+      const el = action.el;
+      if (el.type === 'freedraw') {
+        el.points.push([pt.x - el.x, pt.y - el.y]);
+      } else {
+        el.width = pt.x - action.start.x;
+        el.height = pt.y - action.start.y;
+      }
+      render(); break;
+    }
+    case 'move': {
+      const dx = pt.x - action.start.x, dy = pt.y - action.start.y;
+      for (const o of action.origins) { o.el.x = o.x + dx; o.el.y = o.y + dy; }
+      render(); break;
+    }
+    case 'resize': { applyResize(action, pt, e.shiftKey); render(); break; }
+    case 'rotate': { applyRotate(action, pt, e.shiftKey); render(); break; }
+    case 'erasing': {
+      const hit = hitTest(pt);
+      if (hit) { state.elements = state.elements.filter(el => el !== hit); render(); }
+      break;
+    }
+    case 'marquee': {
+      action.cur = pt; render(); drawMarquee(action); break;
+    }
+  }
+}
+
+function onUp(e) {
+  if (!action) return;
+  canvas.classList.remove('panning');
+
+  if (action.type === 'create') {
+    const el = action.el;
+    // çok küçük şekil = kaza tıklaması, sil
+    if (el.type !== 'freedraw' && Math.abs(el.width) < 3 && Math.abs(el.height) < 3) {
+      state.elements = state.elements.filter(x => x !== el);
+      history.pop();
+    } else {
+      // Aynı araçta kal (kalem/kare ile çizmeye devam et).
+      // Seçime otomatik geçmiyoruz; seçim boşta kalsın ki tutamaçlar çizimi engellemesin.
+      state.appState.selectedIds.clear();
+    }
+  }
+  if (action.type === 'marquee') {
+    selectInMarquee(action);
+  }
+  action = null;
+  render();
+}
+
+/* ---- Boyutlandırma ----
+   Model: sürüklenen tutamacın KARŞI köşesi/kenarı sabit "anchor"dır.
+   Yeni bbox = anchor ile fare arasındaki dikdörtgen. Elemanlar eski bbox'tan
+   yeni bbox'a lineer eşlenir. Min boyut ile çökme/ters dönme engellenir. */
+function applyResize(action, pt, keepAspect) {
+  const { bb, handle, snapshot } = action;
+  const left = handle.includes('w'), right = handle.includes('e');
+  const top  = handle.includes('n'), bot   = handle.includes('s');
+  const MIN = 8; // en küçük bbox (scene birimi)
+
+  // Sabit kenarlar (anchor): sürüklenmeyen kenarlar eski yerinde kalır.
+  const oldL = bb.x, oldR = bb.x + bb.w, oldT = bb.y, oldB = bb.y + bb.h;
+  let newL = oldL, newR = oldR, newT = oldT, newB = oldB;
+
+  if (left)  newL = Math.min(pt.x, oldR - MIN);   // sol kenarı taşı, sağ sabit
+  if (right) newR = Math.max(pt.x, oldL + MIN);   // sağ kenarı taşı, sol sabit
+  if (top)   newT = Math.min(pt.y, oldB - MIN);
+  if (bot)   newB = Math.max(pt.y, oldT + MIN);
+
+  let sx = (newR - newL) / bb.w;
+  let sy = (newB - newT) / bb.h;
+
+  // Shift = oranı koru (yalnız köşe tutamaçlarında)
+  if (keepAspect && (left||right) && (top||bot)) {
+    const s = Math.max(sx, sy);
+    sx = sy = s;
+    if (left) newL = oldR - bb.w * s;
+    if (right) newR = oldL + bb.w * s;
+    if (top)  newT = oldB - bb.h * s;
+    if (bot)  newB = oldT + bb.h * s;
+  }
+
+  // ölçekleme sabit noktası = anchor köşesi (sabit kalan kenarların kesişimi)
+  const anchorX = right ? oldL : oldR;   // sağ sürükleniyorsa sol sabit → anchor sol
+  const anchorY = bot   ? oldT : oldB;
+
+  for (const { el, orig } of snapshot) {
+    el.x = anchorX + (orig.x - anchorX) * sx;
+    el.y = anchorY + (orig.y - anchorY) * sy;
+    el.width  = orig.width  * sx;
+    el.height = orig.height * sy;
+    if (orig.points)
+      el.points = orig.points.map(p => [p[0]*sx, p[1]*sy]);
+    if (orig.type === 'text')
+      el.fontSize = Math.max(6, orig.fontSize * sy);
+  }
+}
+
+/* ---- Döndürme: her elemanın angle'ına ortak merkez etrafında delta ekle ---- */
+function applyRotate(action, pt, snap) {
+  const { cx, cy, startAng, snapshot } = action;
+  let ang = Math.atan2(pt.y - cy, pt.x - cx) - startAng;
+  if (snap) ang = Math.round(ang / (Math.PI/12)) * (Math.PI/12); // 15° adım
+  for (const { el, orig } of snapshot) {
+    el.angle = (orig.angle || 0) + ang;
+    // eleman merkezini ortak merkez etrafında döndür
+    const ocx = orig.x + orig.width/2, ocy = orig.y + orig.height/2;
+    const cos = Math.cos(ang), sin = Math.sin(ang);
+    const dx = ocx - cx, dy = ocy - cy;
+    const ncx = cx + dx*cos - dy*sin, ncy = cy + dx*sin + dy*cos;
+    el.x = ncx - orig.width/2;
+    el.y = ncy - orig.height/2;
+  }
+}
+
+function drawMarquee(a) {
+  const { zoom, scrollX, scrollY } = state.appState;
+  const x1 = Math.min(a.start.x, a.cur.x)*zoom+scrollX;
+  const y1 = Math.min(a.start.y, a.cur.y)*zoom+scrollY;
+  const w = Math.abs(a.cur.x - a.start.x)*zoom, h = Math.abs(a.cur.y - a.start.y)*zoom;
+  ctx.save();
+  ctx.setTransform(window.devicePixelRatio||1,0,0,window.devicePixelRatio||1,0,0);
+  ctx.fillStyle = '#6741d922'; ctx.strokeStyle = '#6741d9';
+  ctx.fillRect(x1,y1,w,h); ctx.strokeRect(x1,y1,w,h);
+  ctx.restore();
+}
+function selectInMarquee(a) {
+  const x1 = Math.min(a.start.x, a.cur.x), y1 = Math.min(a.start.y, a.cur.y);
+  const x2 = Math.max(a.start.x, a.cur.x), y2 = Math.max(a.start.y, a.cur.y);
+  const groups = new Set();
+  for (const el of state.elements) {
+    const b = bounds(el);
+    if (b.x >= x1 && b.y >= y1 && b.x+b.w <= x2 && b.y+b.h <= y2) {
+      state.appState.selectedIds.add(el.id);
+      if (el.groupId) groups.add(el.groupId);
+    }
+  }
+  // kısmen giren gruplar tam seçilsin
+  if (groups.size)
+    for (const el of state.elements)
+      if (el.groupId && groups.has(el.groupId)) state.appState.selectedIds.add(el.id);
+}
+
+/* metin düzenleyici: canvas üzerine geçici bir textarea koyar */
+function spawnTextEditor(clientX, clientY, scenePt, existing) {
+  const ta = document.createElement('textarea');
+  const fontSize = existing ? existing.fontSize : 20;
+  Object.assign(ta.style, {
+    position: 'fixed', left: clientX + 'px', top: clientY + 'px',
+    font: `${fontSize * state.appState.zoom}px "Comic Sans MS", cursive`,
+    color: state.appState.strokeColor, background: 'transparent',
+    border: '1px dashed #6741d9', outline: 'none', resize: 'none',
+    minWidth: '40px', minHeight: fontSize + 'px', zIndex: 100, overflow: 'hidden',
+    padding: '0', lineHeight: 1.25,
+  });
+  ta.value = existing ? existing.text : '';
+  document.body.appendChild(ta);
+  ta.focus();
+  const finish = () => {
+    const val = ta.value.trim();
+    ta.remove();
+    if (existing) {
+      pushHistory();
+      if (val) existing.text = val;
+      else state.elements = state.elements.filter(e => e !== existing);
+    } else if (val) {
+      pushHistory();
+      state.elements.push({
+        id: uid(), type: 'text', x: scenePt.x, y: scenePt.y,
+        width: 0, height: 0, angle: 0, text: val, fontSize,
+        strokeColor: state.appState.strokeColor,
+        backgroundColor: 'transparent',
+        strokeWidth: 1, roughness: 0, seed: seed(),
+      });
+    }
+    setTool('select');
+    render();
+  };
+  ta.addEventListener('blur', finish);
+  ta.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape') { ta.value = existing ? existing.text : ''; ta.blur(); }
+    if (ev.key === 'Enter' && ev.ctrlKey) ta.blur();
+  });
+}
+
+// çift tık: metin düzenle
+canvas.addEventListener('dblclick', e => {
+  const pt = toScene(e.clientX, e.clientY);
+  const hit = hitTest(pt);
+  if (hit && hit.type === 'text') {
+    // mevcut metni düzenle: geçici olarak kaldırıp editörde aç
+    state.elements = state.elements.filter(x => x !== hit);
+    render();
+    spawnTextEditor(e.clientX, e.clientY, pt, hit);
+  } else if (!hit && (state.appState.tool === 'select' || state.appState.tool === 'text')) {
+    // yalnızca boş alana çift tıklayınca yeni metin başlat (nesne üstünde DEĞİL)
+    spawnTextEditor(e.clientX, e.clientY, pt, null);
+  }
+  // metin dışı bir nesne üstünde çift tık: hiçbir şey yapma (silmez, editör açmaz)
+});
+
+/* ---------- ZOOM & PAN (fare tekeri) ---------- */
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey) { pan(0, 0); return; }
+  const { zoom } = state.appState;
+  if (e.ctrlKey) return;
+  // trackpad kaydırma vs. tekerlek zoom: burada tekerlek = zoom
+  const delta = -e.deltaY;
+  zoomAt(e.clientX, e.clientY, delta > 0 ? 1.1 : 1/1.1);
+}, { passive: false });
+
+function zoomAt(cx, cy, factor) {
+  const a = state.appState;
+  const newZoom = Math.min(8, Math.max(0.1, a.zoom * factor));
+  // imleç altındaki scene noktası sabit kalsın
+  const scene = toScene(cx, cy);
+  a.zoom = newZoom;
+  a.scrollX = cx - scene.x * newZoom;
+  a.scrollY = cy - scene.y * newZoom;
+  render();
+}
+function pan(dx, dy){ state.appState.scrollX += dx; state.appState.scrollY += dy; render(); }
+
+/* ---------- ARAÇ ÇUBUĞU ---------- */
+function setTool(tool) {
+  state.appState.tool = tool;
+  document.querySelectorAll('.tool').forEach(b =>
+    b.classList.toggle('active', b.dataset.tool === tool));
+  document.getElementById('panel').classList.toggle('show',
+    !['select','pan','eraser'].includes(tool));
+  canvas.className = tool === 'pan' ? 'pan' : '';
+}
+document.querySelectorAll('.tool').forEach(btn =>
+  btn.addEventListener('click', () => {
+    if (btn.dataset.tool === 'image') { document.getElementById('imageInput').click(); return; }
+    setTool(btn.dataset.tool);
+  }));
+
+/* ---------- GÖRSEL YÜKLE ---------- */
+document.getElementById('imageInput').onchange = e => {
+  const f = e.target.files[0];
+  e.target.value = ''; // aynı dosya tekrar seçilebilsin
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => addImageElement(r.result); // base64 data URL
+  r.readAsDataURL(f);
+};
+
+function addImageElement(dataUrl) {
+  const img = new Image();
+  img.onload = () => {
+    // ekranın ortasına, en boy oranını koruyarak makul boyutta yerleştir
+    const maxDim = 320;
+    let w = img.naturalWidth, h = img.naturalHeight;
+    const scale = Math.min(maxDim / w, maxDim / h, 1);
+    w *= scale; h *= scale;
+    const center = toScene(innerWidth/2, innerHeight/2);
+    const el = {
+      id: uid(), type: 'image', x: center.x - w/2, y: center.y - h/2,
+      width: w, height: h, angle: 0, src: dataUrl,
+      strokeColor: '#1e1e1e', backgroundColor: 'transparent',
+      strokeWidth: 1, roughness: 0, seed: seed(),
+    };
+    imageCache[el.id] = img;
+    pushHistory();
+    state.elements.push(el);
+    state.appState.selectedIds = new Set([el.id]);
+    setTool('select');
+    render();
+  };
+  img.src = dataUrl;
+}
+
+// klavye kısayolları
+window.addEventListener('keydown', e => {
+  if (document.querySelector('textarea')) return; // metin yazarken kısayol yok
+  const map = { v:'select', r:'rectangle', d:'diamond', o:'ellipse', a:'arrow', l:'line', p:'freedraw', t:'text', e:'eraser', h:'pan' };
+  if (e.key === 'i' || e.key === 'I') { document.getElementById('imageInput').click(); return; }
+  if (e.key === ' ') { spaceHeld = true; canvas.classList.add('pan'); return; }
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod) {
+    const k = e.key.toLowerCase();
+    if (k === 'z') { e.preventDefault(); undo(); return; }
+    if (k === 'c') { e.preventDefault(); copySelection(); return; }
+    if (k === 'v') { e.preventDefault(); pasteClipboard(); return; }
+    if (k === 'd') { e.preventDefault(); duplicateSelection(); return; }
+    if (k === 'a') { e.preventDefault(); selectAll(); return; }
+    if (k === 'g' && !e.shiftKey) { e.preventDefault(); groupSelection(); return; }
+    if (k === 'g' && e.shiftKey)  { e.preventDefault(); ungroupSelection(); return; }
+    return; // diğer Ctrl kısayollarını tarayıcıya bırakma ama araç kısayolu da açma
+  }
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (state.appState.selectedIds.size) {
+      pushHistory();
+      state.elements = state.elements.filter(el => !state.appState.selectedIds.has(el.id));
+      state.appState.selectedIds.clear(); render();
+    }
+    return;
+  }
+  if (map[e.key]) setTool(map[e.key]);
+});
+window.addEventListener('keyup', e => {
+  if (e.key === ' ') { spaceHeld = false; canvas.classList.remove('pan'); if(state.appState.tool!=='pan') canvas.className=''; }
+});
+
+/* ---------- KOPYALA / YAPIŞTIR / ÇOĞALT / GRUPLA ---------- */
+let clipboard = [];   // kopyalanan elemanların derin kopyası
+let pasteCount = 0;   // arka arkaya yapıştırmada kayma için
+
+function selectedElements() {
+  return [...state.appState.selectedIds]
+    .map(id => state.elements.find(e => e.id === id)).filter(Boolean);
+}
+
+function copySelection() {
+  clipboard = selectedElements().map(el => JSON.parse(JSON.stringify(el)));
+  pasteCount = 0;
+}
+
+// kopyalananları yeni id'lerle, kaydırılmış olarak ekle
+function cloneWithOffset(list, dx, dy) {
+  const groupRemap = {}; // eski groupId -> yeni groupId (grup ilişkisini koru)
+  return list.map(src => {
+    const el = JSON.parse(JSON.stringify(src));
+    el.id = uid();
+    el.x += dx; el.y += dy;
+    if (el.groupId) {
+      if (!groupRemap[el.groupId]) groupRemap[el.groupId] = uid();
+      el.groupId = groupRemap[el.groupId];
+    }
+    if (el.type === 'image' && el.src) { // görsel cache'ini de kopyala
+      const img = new Image(); img.onload = render; img.src = el.src;
+      imageCache[el.id] = img;
+    }
+    return el;
+  });
+}
+
+function pasteClipboard() {
+  if (!clipboard.length) return;
+  pasteCount++;
+  const off = 16 * pasteCount;
+  const clones = cloneWithOffset(clipboard, off, off);
+  pushHistory();
+  state.elements.push(...clones);
+  state.appState.selectedIds = new Set(clones.map(c => c.id));
+  setTool('select'); render();
+}
+
+function duplicateSelection() {
+  const sel = selectedElements(); if (!sel.length) return;
+  const clones = cloneWithOffset(sel, 16, 16);
+  pushHistory();
+  state.elements.push(...clones);
+  state.appState.selectedIds = new Set(clones.map(c => c.id));
+  render();
+}
+
+function selectAll() {
+  state.appState.selectedIds = new Set(state.elements.map(e => e.id));
+  setTool('select'); render();
+}
+
+function groupSelection() {
+  const sel = selectedElements(); if (sel.length < 2) return;
+  const gid = uid();
+  pushHistory();
+  sel.forEach(el => el.groupId = gid);
+  render();
+}
+
+function ungroupSelection() {
+  const sel = selectedElements(); if (!sel.length) return;
+  pushHistory();
+  sel.forEach(el => delete el.groupId);
+  render();
+}
+
+/* ---------- ÖZELLİK PANELİ ---------- */
+const STROKES = ['#1e1e1e','#e03131','#2f9e44','#1971c2','#f08c00','#9c36b5'];
+const FILLS   = ['transparent','#ffc9c9','#b2f2bb','#a5d8ff','#ffec99','#eebefa'];
+function buildSwatches(containerId, colors, key) {
+  const c = document.getElementById(containerId);
+  colors.forEach(col => {
+    const s = document.createElement('div');
+    s.className = 'swatch';
+    s.style.background = col === 'transparent'
+      ? 'repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 50%/10px 10px' : col;
+    if (state.appState[key] === col) s.classList.add('active');
+    s.onclick = () => {
+      state.appState[key] = col;
+      c.querySelectorAll('.swatch').forEach(x=>x.classList.remove('active'));
+      s.classList.add('active');
+      applyToSelection();
+    };
+    c.appendChild(s);
+  });
+}
+buildSwatches('strokeSwatches', STROKES, 'strokeColor');
+buildSwatches('fillSwatches', FILLS, 'backgroundColor');
+
+document.getElementById('strokeWidth').addEventListener('click', e => {
+  if (e.target.dataset.w) {
+    state.appState.strokeWidth = +e.target.dataset.w;
+    seg('strokeWidth', e.target); applyToSelection();
+  }
+});
+document.getElementById('roughness').addEventListener('click', e => {
+  if (e.target.dataset.r) {
+    state.appState.roughness = +e.target.dataset.r;
+    seg('roughness', e.target); applyToSelection();
+  }
+});
+function seg(id, btn){ document.getElementById(id).querySelectorAll('button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+
+// panel değişiklikleri seçili elemanlara da uygulansın
+function applyToSelection() {
+  if (!state.appState.selectedIds.size) return;
+  pushHistory();
+  for (const id of state.appState.selectedIds) {
+    const el = state.elements.find(e=>e.id===id); if(!el) continue;
+    el.strokeColor = state.appState.strokeColor;
+    if (el.type !== 'text') el.backgroundColor = state.appState.backgroundColor;
+    el.strokeWidth = state.appState.strokeWidth;
+    el.roughness = state.appState.roughness;
+  }
+  render();
+}
+
+/* ---------- ZOOM BAR ---------- */
+document.getElementById('zoomIn').onclick  = () => zoomAt(innerWidth/2, innerHeight/2, 1.2);
+document.getElementById('zoomOut').onclick = () => zoomAt(innerWidth/2, innerHeight/2, 1/1.2);
+document.getElementById('zoomReset').onclick = () => { state.appState.zoom=1; state.appState.scrollX=0; state.appState.scrollY=0; render(); };
+function updateZoomLabel(){ document.getElementById('zoomLvl').textContent = Math.round(state.appState.zoom*100)+'%'; }
+
+/* ---------- 5) FILE: kaydet / yükle / PNG ---------- */
+document.getElementById('btnClear').onclick = () => {
+  if (confirm('Tüm çizim silinsin mi?')) { pushHistory(); state.elements=[]; state.appState.selectedIds.clear(); render(); }
+};
+document.getElementById('btnSave').onclick = () => {
+  const data = { type:'aila-whiteboard', version:1, elements: state.elements, appState:{ zoom:state.appState.zoom } };
+  const blob = new Blob([JSON.stringify(data,null,2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'aila-cizim.excalidraw'; a.click();
+};
+document.getElementById('btnLoad').onclick = () => document.getElementById('fileInput').click();
+document.getElementById('fileInput').onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const data = JSON.parse(r.result);
+      if (Array.isArray(data.elements)) {
+        pushHistory();
+        // seed yoksa üret (Excalidraw dosyalarıyla uyumluluk)
+        state.elements = data.elements.map(el => ({ seed: el.seed ?? seed(), roughness: el.roughness ?? 1, ...el }));
+        // görselleri cache'e yeniden yükle (src data URL'inden)
+        for (const el of state.elements)
+          if (el.type === 'image' && el.src) {
+            const img = new Image();
+            img.onload = render;
+            img.src = el.src;
+            imageCache[el.id] = img;
+          }
+        state.appState.selectedIds.clear();
+        render();
+      } else alert('Geçersiz dosya.');
+    } catch { alert('Dosya okunamadı.'); }
+  };
+  r.readAsText(f);
+};
+document.getElementById('btnPng').onclick = () => {
+  // Beyaz zeminli PNG: geçici canvas'a önce beyaz doldur, sonra mevcut çizimi bas.
+  const out = document.createElement('canvas');
+  out.width = canvas.width; out.height = canvas.height;
+  const octx = out.getContext('2d');
+  octx.fillStyle = '#ffffff';
+  octx.fillRect(0, 0, out.width, out.height);
+  octx.drawImage(canvas, 0, 0);
+  const link = document.createElement('a');
+  link.download = 'aila-cizim.png';
+  link.href = out.toDataURL('image/png');
+  link.click();
+};
+
+/* ---------- BAŞLAT ---------- */
+window.addEventListener('resize', resize);
+resize();
+setTool('select');
+</script>
+</body>
+</html>
