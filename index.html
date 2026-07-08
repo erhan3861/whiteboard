@@ -281,9 +281,10 @@
             background: #ffffff;
             border: 1px solid #e4e4e7;
             border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
             z-index: 100;
         }
+
         .ai-btn {
             height: 36px;
             padding: 0 12px;
@@ -299,20 +300,23 @@
             gap: 4px;
             transition: background 0.2s;
         }
+
         .ai-btn:hover {
             background: #ede9fe;
             color: #6741d9;
         }
+
         /* ---- Basit AI Popup ---- */
         .ai-modal {
             position: fixed;
             inset: 0;
-            background: rgba(0,0,0,0.4);
+            background: rgba(0, 0, 0, 0.4);
             display: none;
             align-items: center;
             justify-content: center;
             z-index: 1000;
         }
+
         .ai-modal-content {
             background: #ffffff;
             border-radius: 12px;
@@ -321,9 +325,10 @@
             max-height: 80vh;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
             overflow: hidden;
         }
+
         .ai-modal-header {
             padding: 12px 16px;
             border-bottom: 1px solid #e4e4e7;
@@ -331,12 +336,14 @@
             justify-content: space-between;
             align-items: center;
         }
+
         .ai-modal-header h3 {
             font-size: 15px;
             font-weight: 700;
             color: #6741d9;
             margin: 0;
         }
+
         .ai-modal-close {
             background: transparent;
             border: none;
@@ -344,6 +351,7 @@
             cursor: pointer;
             color: #8a8a90;
         }
+
         .ai-modal-body {
             padding: 16px;
             overflow-y: auto;
@@ -351,6 +359,7 @@
             line-height: 1.5;
             color: #1e1e1e;
         }
+
         .ai-modal-footer {
             padding: 12px 16px;
             border-top: 1px solid #e4e4e7;
@@ -358,6 +367,7 @@
             justify-content: flex-end;
             gap: 8px;
         }
+
         .ai-modal-footer button {
             padding: 8px 12px;
             border: 1px solid #e4e4e7;
@@ -368,23 +378,27 @@
             cursor: pointer;
             color: #1e1e1e;
         }
+
         .ai-modal-footer button.primary {
             background: #6741d9;
             color: #fff;
             border-color: #6741d9;
         }
+
         /* ---- Soru Seçenekleri ---- */
         .quiz-q {
             font-weight: 600;
             margin-bottom: 10px;
             margin-top: 10px;
         }
+
         .quiz-opts {
             display: flex;
             flex-direction: column;
             gap: 6px;
             margin-bottom: 15px;
         }
+
         .quiz-opt {
             padding: 8px 12px;
             border: 1px solid #e4e4e7;
@@ -397,21 +411,25 @@
             transition: all 0.2s;
             color: #1e1e1e;
         }
+
         .quiz-opt:hover {
             border-color: #6741d9;
             background: #f1f0ff;
         }
+
         .quiz-opt.correct {
             background: #ecfdf5;
             border-color: #10b981;
             color: #047857 !important;
             font-weight: 600;
         }
+
         .quiz-opt.incorrect {
             background: #fef2f2;
             border-color: #ef4444;
             color: #b91c1c !important;
         }
+
         /* ---- Toast ---- */
         .ai-toast {
             position: fixed;
@@ -423,7 +441,7 @@
             padding: 8px 16px;
             border-radius: 20px;
             font-size: 12px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
             z-index: 2000;
             display: none;
         }
@@ -453,7 +471,7 @@
     <!-- Toast Bildirim Elemanı -->
     <div class="ai-toast" id="aiToast"></div>
 
-    <div class="brand">AILA ✎</div>
+    <!-- <div class="brand">AILA ✎</div> -->
 
     <div class="toolbar" id="toolbar">
         <button class="tool" data-tool="pan" title="El / Kaydır (Boşluk)">✋</button>
@@ -1555,7 +1573,7 @@
                 const topic = getTopic();
                 const content = summaries[topic];
                 aiBody.innerHTML = `<div style="padding:4px;">${content}</div>`;
-                
+
                 aiFooter.innerHTML = `
                     <button onclick="downloadText('Ozet', '${topic}')">📂 İndir</button>
                     <button onclick="shareText('Ozet')">🔗 Paylaş</button>
@@ -1573,7 +1591,7 @@
                     <p style="margin-bottom:10px; color:#52525b; font-size:12.5px;">Çizimleriniz analiz edildi ve düzenli bir eğitim şemasına dönüştürüldü:</p>
                     <div id="diagramWrapper">${content}</div>
                 `;
-                
+
                 aiFooter.innerHTML = `
                     <button onclick="downloadSvgAsPng('${topic}')">🖼 PNG İndir</button>
                     <button onclick="shareLink('Sema')">🔗 Paylaş</button>
@@ -1587,7 +1605,7 @@
             startSimulation('Konu Sınavı', () => {
                 const topic = getTopic();
                 const qs = quizzes[topic];
-                
+
                 let html = '<p style="color:#52525b; margin-bottom:12px; font-size:12.5px;">Tahtadaki konuya göre 2 soruluk mini testiniz:</p>';
                 qs.forEach((q, idx) => {
                     html += `
@@ -1601,7 +1619,7 @@
                     `;
                 });
                 aiBody.innerHTML = html;
-                
+
                 aiFooter.innerHTML = `
                     <button onclick="downloadQuiz('${topic}')">📂 Sınavı İndir</button>
                     <button onclick="shareLink('Sinav')">🔗 Paylaş</button>
@@ -1632,7 +1650,7 @@
             const el = document.createElement('div');
             el.innerHTML = summaries[topic];
             const txt = el.textContent || el.innerText;
-            
+
             const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
@@ -1664,9 +1682,9 @@
                     c.width = 800; c.height = 500;
                     const ctxTemp = c.getContext('2d');
                     ctxTemp.fillStyle = '#ffffff';
-                    ctxTemp.fillRect(0,0,800,500);
+                    ctxTemp.fillRect(0, 0, 800, 500);
                     ctxTemp.drawImage(img, 0, 0, 800, 500);
-                    
+
                     const a = document.createElement('a');
                     a.href = c.toDataURL('image/png');
                     a.download = `AILA-AI-Sema-${topic}.png`;
@@ -1750,7 +1768,7 @@
             qs.forEach((q, idx) => {
                 txt += `${idx + 1}. ${q.q}\nA) ${q.a}\nB) ${q.b}\nC) ${q.c}\nD) ${q.d}\nCevap: ${q.ans.toUpperCase()}\n\n`;
             });
-            
+
             const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
