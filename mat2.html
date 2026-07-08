@@ -1,0 +1,2285 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AILA Whiteboard</title>
+    <!-- Rough.js: Excalidraw'ın el-çizimi (eskiz) görünümünü sağlayan kütüphane -->
+    <script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+    <style>
+        :root {
+            --bg: #f7f7f8;
+            --panel: #ffffff;
+            --border: #e4e4e7;
+            --accent: #6741d9;
+            --accent-soft: #ede9fe;
+            --text: #1e1e1e;
+            --muted: #8a8a90;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            inset: 0;
+            touch-action: none;
+        }
+
+        #canvas.pan {
+            cursor: grab;
+        }
+
+        #canvas.panning {
+            cursor: grabbing;
+        }
+
+        /* ---- Üst araç çubuğu ---- */
+        .toolbar {
+            position: fixed;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 4px;
+            padding: 6px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .08);
+            z-index: 10;
+        }
+
+        .tool {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text);
+            position: relative;
+        }
+
+        .tool:hover {
+            background: #f1f0ff;
+        }
+
+        .tool.active {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .tool small {
+            position: absolute;
+            bottom: 1px;
+            right: 3px;
+            font-size: 9px;
+            color: var(--muted);
+        }
+
+        .sep {
+            width: 1px;
+            background: var(--border);
+            margin: 4px 2px;
+        }
+
+        /* ---- Sol özellik paneli ---- */
+        .panel {
+            position: fixed;
+            top: 70px;
+            left: 12px;
+            width: 200px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .08);
+            padding: 12px;
+            z-index: 10;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            font-size: 12px;
+        }
+
+        .panel.show {
+            display: flex;
+        }
+
+        .panel .row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .panel label {
+            color: var(--muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: .04em;
+        }
+
+        .swatches {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 0, 0, .1);
+            cursor: pointer;
+        }
+
+        .swatch.active {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px;
+        }
+
+        .seg {
+            display: flex;
+            gap: 4px;
+        }
+
+        .seg button {
+            flex: 1;
+            border: 1px solid var(--border);
+            background: #fff;
+            border-radius: 6px;
+            padding: 6px 0;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .seg button.active {
+            background: var(--accent-soft);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* ---- Alt sağ: zoom ---- */
+        .zoombar {
+            position: fixed;
+            bottom: 12px;
+            left: 12px;
+            display: flex;
+            gap: 4px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .08);
+            z-index: 10;
+            overflow: hidden;
+        }
+
+        .zoombar button {
+            width: 34px;
+            height: 34px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .zoombar button:hover {
+            background: #f1f0ff;
+        }
+
+        .zoombar .lvl {
+            min-width: 52px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--muted);
+        }
+
+        /* ---- Alt sağ: dosya işlemleri ---- */
+        .filebar {
+            position: fixed;
+            bottom: 12px;
+            right: 12px;
+            display: flex;
+            gap: 4px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .08);
+            z-index: 10;
+            padding: 4px;
+        }
+
+        .filebar button {
+            height: 34px;
+            padding: 0 12px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 12px;
+            border-radius: 6px;
+            color: var(--text);
+        }
+
+        .filebar button:hover {
+            background: #f1f0ff;
+        }
+
+        .brand {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 5;
+            font-weight: 800;
+            letter-spacing: .06em;
+            color: var(--accent);
+            font-size: 15px;
+        }
+
+        .hint {
+            position: fixed;
+            bottom: 56px;
+            left: 12px;
+            z-index: 5;
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        /* ---- Sağ Üst AI Butonları ---- */
+        .ai-toolbar {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 6px;
+            padding: 6px;
+            background: #ffffff;
+            border: 1px solid #e4e4e7;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            z-index: 100;
+        }
+
+        .ai-btn {
+            height: 36px;
+            padding: 0 12px;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e1e1e;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: background 0.2s;
+        }
+
+        .ai-btn:hover {
+            background: #ede9fe;
+            color: #6741d9;
+        }
+
+        /* ---- Basit AI Popup ---- */
+        .ai-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .ai-modal-content {
+            background: #ffffff;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+        }
+
+        .ai-modal-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e4e4e7;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-modal-header h3 {
+            font-size: 15px;
+            font-weight: 700;
+            color: #6741d9;
+            margin: 0;
+        }
+
+        .ai-modal-close {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #8a8a90;
+        }
+
+        .ai-modal-body {
+            padding: 16px;
+            overflow-y: auto;
+            font-size: 13.5px;
+            line-height: 1.5;
+            color: #1e1e1e;
+        }
+
+        .ai-modal-footer {
+            padding: 12px 16px;
+            border-top: 1px solid #e4e4e7;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .ai-modal-footer button {
+            padding: 8px 12px;
+            border: 1px solid #e4e4e7;
+            background: #fff;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #1e1e1e;
+        }
+
+        .ai-modal-footer button.primary {
+            background: #6741d9;
+            color: #fff;
+            border-color: #6741d9;
+        }
+
+        /* ---- Soru Seçenekleri ---- */
+        .quiz-q {
+            font-weight: 600;
+            margin-bottom: 10px;
+            margin-top: 10px;
+        }
+
+        .quiz-opts {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 15px;
+        }
+
+        .quiz-opt {
+            padding: 8px 12px;
+            border: 1px solid #e4e4e7;
+            border-radius: 6px;
+            background: #fafafa;
+            cursor: pointer;
+            font-size: 12.5px;
+            text-align: left;
+            width: 100%;
+            transition: all 0.2s;
+            color: #1e1e1e;
+        }
+
+        .quiz-opt:hover {
+            border-color: #6741d9;
+            background: #f1f0ff;
+        }
+
+        .quiz-opt.correct {
+            background: #ecfdf5;
+            border-color: #10b981;
+            color: #047857 !important;
+            font-weight: 600;
+        }
+
+        .quiz-opt.incorrect {
+            background: #fef2f2;
+            border-color: #ef4444;
+            color: #b91c1c !important;
+        }
+
+        /* ---- Toast ---- */
+        .ai-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e1e1e;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            z-index: 2000;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Sağ Üst AI Paneli -->
+    <div class="ai-toolbar">
+        <button class="ai-btn" id="btnAISummary" title="Özetle">📝 Özetle</button>
+        <button class="ai-btn" id="btnAIDiagram" title="Güzelleştir">✨ Güzelleştir</button>
+        <button class="ai-btn" id="btnAIQuiz" title="Soru Üret">❓ Sınav Yap</button>
+    </div>
+
+    <!-- Yapay Zeka Pop-up (Modal) -->
+    <div class="ai-modal" id="aiModal">
+        <div class="ai-modal-content">
+            <div class="ai-modal-header">
+                <h3 id="aiModalTitle">✨ Yapay Zeka Asistanı</h3>
+                <button class="ai-modal-close" id="aiModalClose">&times;</button>
+            </div>
+            <div class="ai-modal-body" id="aiModalBody"></div>
+            <div class="ai-modal-footer" id="aiModalFooter"></div>
+        </div>
+    </div>
+
+    <!-- Toast Bildirim Elemanı -->
+    <div class="ai-toast" id="aiToast"></div>
+
+    <!-- <div class="brand">AILA ✎</div> -->
+
+    <div class="toolbar" id="toolbar">
+        <button class="tool" data-tool="pan" title="El / Kaydır (Boşluk)">✋</button>
+        <div class="sep"></div>
+        <button class="tool active" data-tool="select" title="Seçim (V)">↖<small>V</small></button>
+        <button class="tool" data-tool="rectangle" title="Dikdörtgen (R)">▭<small>R</small></button>
+        <button class="tool" data-tool="diamond" title="Elmas (D)">◇<small>D</small></button>
+        <button class="tool" data-tool="ellipse" title="Elips (O)">◯<small>O</small></button>
+        <button class="tool" data-tool="arrow" title="Ok (A)">↗<small>A</small></button>
+        <button class="tool" data-tool="line" title="Çizgi (L)">╱<small>L</small></button>
+        <button class="tool" data-tool="freedraw" title="Kalem (P)">✏️<small>P</small></button>
+        <button class="tool" data-tool="text" title="Metin (T)">A<small>T</small></button>
+        <button class="tool" data-tool="image" title="Görsel Ekle (I)">🖼<small>I</small></button>
+        <div class="sep"></div>
+        <button class="tool" data-tool="eraser" title="Sil (E)">🧽<small>E</small></button>
+    </div>
+
+    <div class="panel" id="panel">
+        <div class="row">
+            <label>Çizgi Rengi</label>
+            <div class="swatches" id="strokeSwatches"></div>
+        </div>
+        <div class="row">
+            <label>Dolgu</label>
+            <div class="swatches" id="fillSwatches"></div>
+        </div>
+        <div class="row">
+            <label>Kalınlık</label>
+            <div class="seg" id="strokeWidth">
+                <button data-w="1">İnce</button>
+                <button data-w="2" class="active">Orta</button>
+                <button data-w="4">Kalın</button>
+            </div>
+        </div>
+        <div class="row">
+            <label>Kabalık (eskiz)</label>
+            <div class="seg" id="roughness">
+                <button data-r="0">Düz</button>
+                <button data-r="1" class="active">Eskiz</button>
+                <button data-r="2">Fazla</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="zoombar">
+        <button id="zoomOut">−</button>
+        <div class="lvl" id="zoomLvl">100%</div>
+        <button id="zoomIn">+</button>
+        <button id="zoomReset" title="Sıfırla">⤢</button>
+    </div>
+
+    <div class="filebar">
+        <button id="btnClear">🗑 Temizle</button>
+        <button id="btnSave">💾 Kaydet</button>
+        <button id="btnLoad">📂 Yükle</button>
+        <button id="btnPng">🖼 PNG</button>
+        <input type="file" id="fileInput" accept=".excalidraw,.json" style="display:none">
+    </div>
+    <input type="file" id="imageInput" accept="image/*" style="display:none">
+
+    <div class="hint">Tekerlek: yakınlaş • Boşluk+sürükle: kaydır • Ctrl+C/V kopyala-yapıştır • Ctrl+D çoğalt • Ctrl+G
+        grupla • Üstteki daire: döndür • Köşeler: boyutlandır (Shift=oran/açı)</div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        /* =========================================================================
+           AILA WHITEBOARD — Excalidraw mantığının sadeleştirilmiş uygulaması
+           Katmanlar:
+           1) STATE      : elements[] + appState (zoom/scroll/tool/renk)
+           2) COORDS     : scene <-> screen dönüşümü (sonsuz tuval)
+           3) RENDER     : Rough.js ile her frame'de elements[] çizimi
+           4) INTERACT   : araca göre fare state machine'i
+           5) FILE       : JSON kaydet/yükle, PNG dışa aktar
+           ========================================================================= */
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let rc = null; // rough canvas
+        const imageCache = {}; // id -> HTMLImageElement (base64'ten çözülmüş)
+
+        /* ---------- 1) STATE ---------- */
+        const state = {
+            elements: [
+                // 1) Title Banner Outer Box
+                {
+                    id: "title_bg",
+                    type: "rectangle",
+                    x: 80,
+                    y: 20,
+                    width: 780,
+                    height: 60,
+                    angle: 0,
+                    strokeColor: "#5c7cfa",
+                    backgroundColor: "#edf2ff",
+                    strokeWidth: 2,
+                    roughness: 1.5,
+                    seed: 50505
+                },
+                // Title Banner Text
+                {
+                    id: "title_text",
+                    type: "text",
+                    x: 170,
+                    y: 36,
+                    width: 600,
+                    height: 30,
+                    angle: 0,
+                    text: "🤖 MATEMATİK ROBOTU VE ÇEVRE HESABI (5. Sınıf) 📐",
+                    fontSize: 18,
+                    strokeColor: "#364fc7",
+                    backgroundColor: "transparent",
+                    strokeWidth: 1,
+                    roughness: 0,
+                    seed: 51515
+                },
+                // 2) Soccer Field (Green Yard)
+                {
+                    id: "soccer_bg",
+                    type: "rectangle",
+                    x: 80,
+                    y: 110,
+                    width: 340,
+                    height: 180,
+                    angle: 0,
+                    strokeColor: "#2b8a3e",
+                    backgroundColor: "#ebfbee",
+                    strokeWidth: 3,
+                    roughness: 1,
+                    seed: 52525
+                },
+                // Soccer Center Circle
+                {
+                    id: "soccer_circle",
+                    type: "ellipse",
+                    x: 210,
+                    y: 160,
+                    width: 80,
+                    height: 80,
+                    angle: 0,
+                    strokeColor: "#ffffff",
+                    backgroundColor: "transparent",
+                    strokeWidth: 2.5,
+                    roughness: 0.8,
+                    seed: 53535
+                },
+                // Soccer Center Line
+                {
+                    id: "soccer_line",
+                    type: "line",
+                    x: 250,
+                    y: 110,
+                    width: 0,
+                    height: 180,
+                    angle: 0,
+                    strokeColor: "#ffffff",
+                    strokeWidth: 2.5,
+                    roughness: 0.8,
+                    seed: 54545
+                },
+                // Soccer Text Tag
+                {
+                    id: "soccer_tag",
+                    type: "text",
+                    x: 100,
+                    y: 125,
+                    width: 150,
+                    height: 20,
+                    angle: 0,
+                    text: "⚽ Spor Sahası",
+                    fontSize: 13,
+                    strokeColor: "#2b8a3e",
+                    backgroundColor: "transparent",
+                    strokeWidth: 1,
+                    roughness: 0,
+                    seed: 55555
+                },
+                // Soccer Length Label (Uzun Kenar)
+                {
+                    id: "soccer_len",
+                    type: "text",
+                    x: 170,
+                    y: 300,
+                    width: 150,
+                    height: 20,
+                    angle: 0,
+                    text: "Uzun Kenar = 90 m",
+                    fontSize: 13,
+                    strokeColor: "#e03131",
+                    backgroundColor: "transparent",
+                    strokeWidth: 1,
+                    roughness: 0,
+                    seed: 56565
+                },
+                // Soccer Width Label (Kısa Kenar)
+                {
+                    id: "soccer_wid",
+                    type: "text",
+                    x: 430,
+                    y: 190,
+                    width: 140,
+                    height: 20,
+                    angle: 0,
+                    text: "Kısa Kenar = 50 m",
+                    fontSize: 13,
+                    strokeColor: "#e03131",
+                    backgroundColor: "transparent",
+                    strokeWidth: 1,
+                    roughness: 0,
+                    seed: 57575
+                },
+                // Arrow pointing from soccer solution to field
+                {
+                    id: "soccer_arrow",
+                    type: "arrow",
+                    x: 410,
+                    y: 340,
+                    width: -100,
+                    height: -40,
+                    angle: 0,
+                    strokeColor: "#364fc7",
+                    backgroundColor: "transparent",
+                    strokeWidth: 2,
+                    roughness: 1,
+                    seed: 58585
+                },
+                // Soccer Solution Card Box
+                {
+                    id: "soccer_sol_bg",
+                    type: "rectangle",
+                    x: 80,
+                    y: 350,
+                    width: 340,
+                    height: 100,
+                    angle: 0,
+                    strokeColor: "#495057",
+                    backgroundColor: "#f1f3f5",
+                    strokeWidth: 2,
+                    roughness: 1.2,
+                    seed: 59595
+                },
+                // Soccer Solution Text
+                {
+                    id: "soccer_sol_text",
+                    type: "text",
+                    x: 100,
+                    y: 365,
+                    width: 300,
+                    height: 70,
+                    angle: 0,
+                    text: "Sahanın Çevresi:\nÇevre = 2 × (90 + 50)\nÇevre = 2 × 140 = 280 metre 🏃‍♂️",
+                    fontSize: 14,
+                    strokeColor: "#1c2025",
+                    backgroundColor: "transparent",
+                    strokeWidth: 1,
+                    roughness: 0,
+                    seed: 60606
+                },
+                // 3) Formula Diamond Box
+                {
+                    id: "formula_box",
+                    type: "diamond",
+                    x: 520,
+                    y: 100,
+                    width: 300,
+                    height: 90,
+                    angle: 0,
+                    strokeColor: "#f59e0b",
+                    backgroundColor: "#fffbeb",
+                    strokeWidth: 2.5,
+                    roughness: 1.2,
+                    seed: 61616
+                },
+                // Formula Text
+                {
+                    id: "formula_text",
+                    type: "text",
+                    x: 550,
+                    y: 132,
+                    width: 250,
+                    height: 30,
+                    angle: 0,
+                    text: "Çevre = 2 × ( Kısa + Uzun )",
+                    fontSize: 15,
+                    strokeColor: "#b45309",
+                    backgroundColor: "transparent",
+                    strokeWidth: 1,
+                    roughness: 0,
+                    seed: 62626
+                },
+                // 4) Practice Instruction
+                {
+                    id: "prac_title",
+                    type: "text",
+                    x: 500,
+                    y: 215,
+                    width: 350,
+                    height: 30,
+                    angle: 0,
+                    text: "👇 Robotun Çevrelerini Hesapla! 👇",
+                    fontSize: 14,
+                    strokeColor: "#099268",
+                    backgroundColor: "transparent",
+                    strokeWidth: 1,
+                    roughness: 0,
+                    seed: 63636
+                },
+                // ROBOT HEAD
+                {
+                    id: "robot_head",
+                    type: "rectangle",
+                    x: 620,
+                    y: 260,
+                    width: 80,
+                    height: 80,
+                    angle: 0,
+                    strokeColor: "#1c7ed6",
+                    backgroundColor: "#e7f5ff",
+                    strokeWidth: 3,
+                    roughness: 1,
+                    seed: 64646
+                },
+                // Robot Left Eye
+                {
+                    id: "robot_eye_l",
+                    type: "ellipse",
+                    x: 638,
+                    y: 282,
+                    width: 12,
+                    height: 12,
+                    angle: 0,
+                    strokeColor: "#1c7ed6",
+                    backgroundColor: "#1c7ed6",
+                    strokeWidth: 1,
+                    roughness: 0.5,
+                    seed: 65656
+                },
+                // Robot Right Eye
+                {
+                    id: "robot_eye_r",
+                    type: "ellipse",
+                    x: 670,
+                    y: 282,
+                    width: 12,
+                    height: 12,
+                    angle: 0,
+                    strokeColor: "#1c7ed6",
+                    backgroundColor: "#1c7ed6",
+                    strokeWidth: 1,
+                    roughness: 0.5,
+                    seed: 66666
+                },
+                // Robot Mouth
+                {
+                    id: "robot_mouth",
+                    type: "line",
+                    x: 645,
+                    y: 312,
+                    width: 30,
+                    height: 0,
+                    angle: 0,
+                    strokeColor: "#1c7ed6",
+                    strokeWidth: 2,
+                    roughness: 0.5,
+                    seed: 67677
+                },
+                // Robot Antenna Pole
+                {
+                    id: "robot_ant_pole",
+                    type: "line",
+                    x: 660,
+                    y: 260,
+                    width: 0,
+                    height: -25,
+                    angle: 0,
+                    strokeColor: "#1c7ed6",
+                    strokeWidth: 2,
+                    roughness: 0.8,
+                    seed: 68686
+                },
+                // Robot Antenna Ball
+                {
+                    id: "robot_ant_ball",
+                    type: "ellipse",
+                    x: 652,
+                    y: 222,
+                    width: 16,
+                    height: 16,
+                    angle: 0,
+                    strokeColor: "#1c7ed6",
+                    backgroundColor: "#f59e0b",
+                    strokeWidth: 1.5,
+                    roughness: 0.5,
+                    seed: 69696
+                },
+                // Head Dimension Label
+                {
+                    id: "robot_head_lbl",
+                    type: "text",
+                    x: 715,
+                    y: 285,
+                    width: 130,
+                    height: 40,
+                    angle: 0,
+                    text: "KAFA: Kare\nKenarı = 8 cm\nÇevresi = ? cm",
+                    fontSize: 12,
+                    strokeColor: "#1c7ed6",
+                    backgroundColor: "transparent",
+                    strokeWidth: 1,
+                    roughness: 0,
+                    seed: 70707
+                },
+                // ROBOT BODY
+                {
+                    id: "robot_body",
+                    type: "rectangle",
+                    x: 590,
+                    y: 350,
+                    width: 140,
+                    height: 120,
+                    angle: 0,
+                    strokeColor: "#37b24d",
+                    backgroundColor: "#ebfbee",
+                    strokeWidth: 3,
+                    roughness: 1.2,
+                    seed: 71717
+                },
+                // Robot Button 1
+                {
+                    id: "robot_btn1",
+                    type: "ellipse",
+                    x: 650,
+                    y: 380,
+                    width: 10,
+                    height: 10,
+                    angle: 0,
+                    strokeColor: "#37b24d",
+                    backgroundColor: "#f03e3e",
+                    strokeWidth: 1,
+                    roughness: 0.5,
+                    seed: 72727
+                },
+                // Robot Button 2
+                {
+                    id: "robot_btn2",
+                    type: "ellipse",
+                    x: 650,
+                    y: 410,
+                    width: 10,
+                    height: 10,
+                    angle: 0,
+                    strokeColor: "#37b24d",
+                    backgroundColor: "#f59e0b",
+                    strokeWidth: 1,
+                    roughness: 0.5,
+                    seed: 73737
+                },
+                // Body Dimension Label
+                {
+                    id: "robot_body_lbl",
+                    type: "text",
+                    x: 745,
+                    y: 390,
+                    width: 130,
+                    height: 50,
+                    angle: 0,
+                    text: "GÖVDE: Dikdörtgen\nKısa = 12 cm\nUzun = 14 cm\nÇevresi = ? cm",
+                    fontSize: 12,
+                    strokeColor: "#37b24d",
+                    backgroundColor: "transparent",
+                    strokeWidth: 1,
+                    roughness: 0,
+                    seed: 74747
+                },
+                // Robot Left Arm
+                {
+                    id: "robot_arm_l",
+                    type: "rectangle",
+                    x: 550,
+                    y: 370,
+                    width: 30,
+                    height: 60,
+                    angle: 0,
+                    strokeColor: "#f03e3e",
+                    backgroundColor: "#ffe3e3",
+                    strokeWidth: 2,
+                    roughness: 1,
+                    seed: 75757
+                },
+                // Robot Right Arm
+                {
+                    id: "robot_arm_r",
+                    type: "rectangle",
+                    x: 740,
+                    y: 370,
+                    width: 30,
+                    height: 60,
+                    angle: 0,
+                    strokeColor: "#f03e3e",
+                    backgroundColor: "#ffe3e3",
+                    strokeWidth: 2,
+                    roughness: 1,
+                    seed: 76767
+                },
+                // Robot Left Leg
+                {
+                    id: "robot_leg_l",
+                    type: "rectangle",
+                    x: 620,
+                    y: 480,
+                    width: 25,
+                    height: 70,
+                    angle: 0,
+                    strokeColor: "#f76707",
+                    backgroundColor: "#fff4e6",
+                    strokeWidth: 2,
+                    roughness: 1.1,
+                    seed: 77777
+                },
+                // Robot Right Leg
+                {
+                    id: "robot_leg_r",
+                    type: "rectangle",
+                    x: 675,
+                    y: 480,
+                    width: 25,
+                    height: 70,
+                    angle: 0,
+                    strokeColor: "#f76707",
+                    backgroundColor: "#fff4e6",
+                    strokeWidth: 2,
+                    roughness: 1.1,
+                    seed: 78787
+                },
+                // 5) Extra Hazine Box Question Arrow
+                {
+                    id: "hazine_arrow",
+                    type: "arrow",
+                    x: 160,
+                    y: 490,
+                    width: 100,
+                    height: 50,
+                    angle: 0,
+                    strokeColor: "#7048e8",
+                    backgroundColor: "transparent",
+                    strokeWidth: 2,
+                    roughness: 1,
+                    seed: 79797
+                },
+                // Hazine Diamond Card
+                {
+                    id: "hazine_card",
+                    type: "diamond",
+                    x: 270,
+                    y: 520,
+                    width: 150,
+                    height: 120,
+                    angle: 0,
+                    strokeColor: "#7048e8",
+                    backgroundColor: "#f3f0ff",
+                    strokeWidth: 2.5,
+                    roughness: 1.2,
+                    seed: 80808
+                },
+                // Hazine Card Text
+                {
+                    id: "hazine_text",
+                    type: "text",
+                    x: 292,
+                    y: 555,
+                    width: 110,
+                    height: 60,
+                    angle: 0,
+                    text: "💎 Hazine Sorusu:\nÇevresi 56 cm olan\nbir karenin bir\nkenarı kaç cm'dir?",
+                    fontSize: 10.5,
+                    strokeColor: "#5f3dc4",
+                    backgroundColor: "transparent",
+                    strokeWidth: 1,
+                    roughness: 0,
+                    seed: 81818
+                }
+            ],
+            appState: {
+                tool: 'select',
+                scrollX: 0, scrollY: 0, zoom: 1,   // kamera
+                strokeColor: '#1e1e1e',
+                backgroundColor: 'transparent',
+                strokeWidth: 2,
+                roughness: 1,
+                selectedIds: new Set(),
+            },
+        };
+        let history = [];               // basit undo yığını (elements snapshot)
+
+        function pushHistory() {
+            history.push(JSON.stringify(state.elements));
+            if (history.length > 100) history.shift();
+        }
+        function undo() {
+            if (!history.length) return;
+            state.elements = JSON.parse(history.pop());
+            state.appState.selectedIds.clear();
+            render();
+        }
+
+        const uid = () => Math.random().toString(36).slice(2, 10);
+        const seed = () => Math.floor(Math.random() * 2 ** 31);
+
+        /* ---------- 2) COORDS: scene <-> screen ----------
+           Excalidraw'ın sonsuz tuval sihri buradadır.
+           Eleman verileri her zaman "scene" (dünya) koordinatındadır ve hiç değişmez.
+           Ekrana çizerken kamera (scroll + zoom) uygulanır. */
+        function toScene(clientX, clientY) {
+            const { scrollX, scrollY, zoom } = state.appState;
+            return { x: (clientX - scrollX) / zoom, y: (clientY - scrollY) / zoom };
+        }
+
+        /* ---------- 3) RENDER ---------- */
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = innerWidth * dpr;
+            canvas.height = innerHeight * dpr;
+            canvas.style.width = innerWidth + 'px';
+            canvas.style.height = innerHeight + 'px';
+            rc = rough.canvas(canvas);
+            render();
+        }
+
+        function render() {
+            const dpr = window.devicePixelRatio || 1;
+            const { scrollX, scrollY, zoom } = state.appState;
+
+            ctx.save();
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, innerWidth, innerHeight);
+
+            // sonsuz nokta ızgarası (referans hissi)
+            drawGrid(scrollX, scrollY, zoom);
+
+            // kamerayı uygula: önce kaydır, sonra ölçekle
+            ctx.translate(scrollX, scrollY);
+            ctx.scale(zoom, zoom);
+
+            for (const el of state.elements) drawElement(el);
+
+            // seçim çerçeveleri
+            ctx.restore();
+            ctx.save();
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            drawSelection();
+            ctx.restore();
+
+            updateZoomLabel();
+        }
+
+        function drawGrid(scrollX, scrollY, zoom) {
+            const gap = 24 * zoom;
+            if (gap < 8) return;
+            ctx.fillStyle = '#00000010';
+            const ox = scrollX % gap, oy = scrollY % gap;
+            for (let x = ox; x < innerWidth; x += gap)
+                for (let y = oy; y < innerHeight; y += gap)
+                    ctx.fillRect(x, y, 1, 1);
+        }
+
+        // Rough.js seçenekleri: her elemanda aynı 'seed' -> titreklik sabit kalır
+        function roughOpts(el) {
+            return {
+                stroke: el.strokeColor,
+                strokeWidth: el.strokeWidth,
+                roughness: el.roughness,
+                seed: el.seed,
+                fill: el.backgroundColor === 'transparent' ? undefined : el.backgroundColor,
+                fillStyle: 'hachure',
+                hachureGap: 6,
+                bowing: 1,
+            };
+        }
+
+        function drawElement(el) {
+            // döndürme: elemanı kendi merkezinde döndürerek çiz
+            const rot = el.angle || 0;
+            if (rot) {
+                const b = bounds(el);
+                ctx.save();
+                ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
+                ctx.rotate(rot);
+                ctx.translate(-(b.x + b.w / 2), -(b.y + b.h / 2));
+                drawElementRaw(el);
+                ctx.restore();
+                return;
+            }
+            drawElementRaw(el);
+        }
+
+        function drawElementRaw(el) {
+            switch (el.type) {
+                case 'rectangle':
+                    rc.rectangle(el.x, el.y, el.width, el.height, roughOpts(el)); break;
+                case 'ellipse':
+                    rc.ellipse(el.x + el.width / 2, el.y + el.height / 2, el.width, el.height, roughOpts(el)); break;
+                case 'diamond': {
+                    const { x, y, width: w, height: h } = el;
+                    rc.polygon([[x + w / 2, y], [x + w, y + h / 2], [x + w / 2, y + h], [x, y + h / 2]], roughOpts(el)); break;
+                }
+                case 'line':
+                    rc.line(el.x, el.y, el.x + el.width, el.y + el.height, roughOpts(el)); break;
+                case 'arrow': {
+                    const x2 = el.x + el.width, y2 = el.y + el.height;
+                    rc.line(el.x, el.y, x2, y2, roughOpts(el));
+                    // ok başı
+                    const ang = Math.atan2(el.height, el.width), len = 14;
+                    rc.line(x2, y2, x2 - len * Math.cos(ang - 0.4), y2 - len * Math.sin(ang - 0.4), roughOpts(el));
+                    rc.line(x2, y2, x2 - len * Math.cos(ang + 0.4), y2 - len * Math.sin(ang + 0.4), roughOpts(el));
+                    break;
+                }
+                case 'freedraw':
+                    if (el.points && el.points.length > 1)
+                        rc.linearPath(el.points.map(p => [el.x + p[0], el.y + p[1]]), roughOpts(el));
+                    break;
+                case 'image': {
+                    const img = imageCache[el.id];
+                    if (img && img.complete) {
+                        ctx.drawImage(img, el.x, el.y, el.width, el.height);
+                    } else {
+                        // henüz yüklenmedi: yer tutucu çerçeve
+                        ctx.strokeStyle = '#bbb'; ctx.setLineDash([4, 4]);
+                        ctx.strokeRect(el.x, el.y, el.width, el.height); ctx.setLineDash([]);
+                    }
+                    break;
+                }
+                case 'text':
+                    ctx.font = `${el.fontSize}px "Comic Sans MS", "Segoe Print", cursive`;
+                    ctx.fillStyle = el.strokeColor;
+                    ctx.textBaseline = 'top';
+                    (el.text || '').split('\n').forEach((line, i) =>
+                        ctx.fillText(line, el.x, el.y + i * el.fontSize * 1.25));
+                    break;
+            }
+        }
+
+        /* eleman sınır kutusu (seçim/isabet testi için) */
+        function bounds(el) {
+            let x = el.x, y = el.y, w = el.width, h = el.height;
+            if (el.type === 'text') {
+                ctx.font = `${el.fontSize}px cursive`;
+                const lines = (el.text || '').split('\n');
+                w = Math.max(...lines.map(l => ctx.measureText(l).width), 10);
+                h = lines.length * el.fontSize * 1.25;
+            }
+            // negatif boyutları normalize et
+            if (w < 0) { x += w; w = -w; }
+            if (h < 0) { y += h; h = -h; }
+            return { x, y, w, h };
+        }
+
+        /* seçili elemanların ortak sınır kutusu (scene koordinatı) */
+        function selectionBBox() {
+            const ids = state.appState.selectedIds;
+            if (!ids.size) return null;
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const id of ids) {
+                const el = state.elements.find(e => e.id === id); if (!el) continue;
+                const b = bounds(el);
+                minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+                maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
+            }
+            if (minX === Infinity) return null;
+            return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+        }
+
+        /* 8 tutamaç + döndürme sapının EKRAN koordinatları.
+           Döndürme sapı üstte, kutunun 24px yukarısında. */
+        const HANDLE = 9; // ekran px
+        function handlePositions() {
+            const bb = selectionBBox(); if (!bb) return null;
+            const { zoom, scrollX, scrollY } = state.appState;
+            const x = bb.x * zoom + scrollX, y = bb.y * zoom + scrollY, w = bb.w * zoom, h = bb.h * zoom;
+            const mx = x + w / 2, my = y + h / 2;
+            return {
+                box: { x, y, w, h },
+                handles: {
+                    nw: { x, y }, n: { x: mx, y }, ne: { x: x + w, y },
+                    w: { x, y: my }, e: { x: x + w, y: my },
+                    sw: { x, y: y + h }, s: { x: mx, y: y + h }, se: { x: x + w, y: y + h },
+                },
+                rotate: { x: mx, y: y - 24 },
+            };
+        }
+
+        function drawSelection() {
+            const hp = handlePositions();
+            if (!hp) return;
+            const { box, handles, rotate } = hp;
+
+            ctx.save();
+            ctx.strokeStyle = '#6741d9'; ctx.fillStyle = '#fff'; ctx.lineWidth = 1;
+
+            // çerçeve
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(box.x, box.y, box.w, box.h);
+            ctx.setLineDash([]);
+
+            // döndürme sapı (çizgi + daire)
+            ctx.beginPath();
+            ctx.moveTo(box.x + box.w / 2, box.y);
+            ctx.lineTo(rotate.x, rotate.y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(rotate.x, rotate.y, 5, 0, Math.PI * 2);
+            ctx.fill(); ctx.stroke();
+
+            // 8 boyutlandırma tutamacı
+            for (const k in handles) {
+                const p = handles[k];
+                ctx.fillRect(p.x - HANDLE / 2, p.y - HANDLE / 2, HANDLE, HANDLE);
+                ctx.strokeRect(p.x - HANDLE / 2, p.y - HANDLE / 2, HANDLE, HANDLE);
+            }
+            ctx.restore();
+        }
+
+        /* bir noktanın [a,b] doğru parçasına uzaklığı (isabet testi için) */
+        function distToSegment(p, a, b) {
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const len2 = dx * dx + dy * dy;
+            if (len2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+            let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+        }
+
+        /* isabet testi: verilen scene noktası elemanın üstünde mi?
+           Kapalı şekiller (kutu/elips/elmas) TÜM gövdeden seçilir — rahat seçim için.
+           Çizgi/ok/serbest çizim yakınlıktan seçilir.
+           'tol' zoom'a göre büyür ve minimum bir taban değere sahiptir. */
+        function hitTest(pt) {
+            // tolerans: uzaklaşınca da, çok yakınlaşınca da tıklaması kolay olsun
+            const tol = Math.max(6, 12 / state.appState.zoom);
+            for (let i = state.elements.length - 1; i >= 0; i--) {
+                const el = state.elements[i];
+                if (hitElement(el, pt, tol)) return el;
+            }
+            return null;
+        }
+
+        function hitElement(el, pt, tol) {
+            const b = bounds(el);
+            // önce hızlı ret: genişletilmiş kutunun tamamen dışındaysa atla
+            if (pt.x < b.x - tol || pt.x > b.x + b.w + tol ||
+                pt.y < b.y - tol || pt.y > b.y + b.h + tol) return false;
+
+            switch (el.type) {
+                case 'image':
+                case 'text':
+                case 'rectangle':
+                case 'diamond':
+                    // tüm gövde tıklanabilir (kutu testi zaten geçti). İçi boş olsa bile.
+                    return true;
+
+                case 'ellipse': {
+                    // elips gövdesi + tol payı (köşe boşlukları hariç tutulur ama pay geniş)
+                    const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+                    const rx = b.w / 2 + tol, ry = b.h / 2 + tol;
+                    return ((pt.x - cx) / rx) ** 2 + ((pt.y - cy) / ry) ** 2 <= 1;
+                }
+
+                case 'line':
+                case 'arrow': {
+                    const t = tol + (el.strokeWidth || 1); // kalın çizgi = daha geniş isabet
+                    return distToSegment(pt, { x: el.x, y: el.y },
+                        { x: el.x + el.width, y: el.y + el.height }) <= t;
+                }
+
+                case 'freedraw': {
+                    const t = tol + (el.strokeWidth || 1);
+                    const pts = el.points || [];
+                    for (let i = 1; i < pts.length; i++)
+                        if (distToSegment(pt,
+                            { x: el.x + pts[i - 1][0], y: el.y + pts[i - 1][1] },
+                            { x: el.x + pts[i][0], y: el.y + pts[i][1] }) <= t) return true;
+                    return false;
+                }
+                default: return true;
+            }
+        }
+        /* seçili elemanların derin kopyası — resize/rotate boyunca referans olur */
+        function snapshotSelection() {
+            return [...state.appState.selectedIds]
+                .map(id => state.elements.find(e => e.id === id))
+                .filter(Boolean)
+                .map(el => ({ el, orig: JSON.parse(JSON.stringify(el)) }));
+        }
+
+        /* EKRAN noktasında hangi tutamaç var? 'rotate' | 'nw'.. | null döndürür. */
+        function handleAtScreen(cx, cy) {
+            const hp = handlePositions(); if (!hp) return null;
+            const R = HANDLE; // yakalama yarıçapı
+            if (Math.hypot(cx - hp.rotate.x, cy - hp.rotate.y) <= R) return 'rotate';
+            for (const k in hp.handles) {
+                const p = hp.handles[k];
+                if (Math.abs(cx - p.x) <= R && Math.abs(cy - p.y) <= R) return k;
+            }
+            return null;
+        }
+
+        /* ---------- 4) INTERACT: fare state machine ---------- */
+        let action = null; // {type, ...} çizim/taşıma/boyutlandırma sırasındaki geçici durum
+
+        canvas.addEventListener('pointerdown', onDown);
+        canvas.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+
+        let spaceHeld = false;
+
+        function onDown(e) {
+            const pt = toScene(e.clientX, e.clientY);
+            const tool = (spaceHeld || state.appState.tool === 'pan') ? 'pan' : state.appState.tool;
+            canvas.setPointerCapture(e.pointerId);
+
+            if (tool === 'pan') {
+                action = {
+                    type: 'pan', sx: e.clientX, sy: e.clientY,
+                    ox: state.appState.scrollX, oy: state.appState.scrollY
+                };
+                canvas.classList.add('panning');
+                return;
+            }
+
+            if (tool === 'eraser') {
+                const hit = hitTest(pt);
+                if (hit) { pushHistory(); state.elements = state.elements.filter(el => el !== hit); render(); }
+                action = { type: 'erasing' };
+                return;
+            }
+
+            if (tool === 'select') {
+                // 1) döndürme veya boyutlandırma tutamacı mı? (ekran koordinatı)
+                const h = handleAtScreen(e.clientX, e.clientY);
+                if (h === 'rotate') {
+                    pushHistory();
+                    const bb = selectionBBox();
+                    const cx = bb.x + bb.w / 2, cy = bb.y + bb.h / 2;
+                    action = {
+                        type: 'rotate', cx, cy,
+                        startAng: Math.atan2(pt.y - cy, pt.x - cx),
+                        snapshot: snapshotSelection()
+                    };
+                    return;
+                }
+                if (h) {
+                    pushHistory();
+                    action = { type: 'resize', handle: h, bb: selectionBBox(), snapshot: snapshotSelection() };
+                    return;
+                }
+
+                // 2) bir eleman mı?
+                const hit = hitTest(pt);
+                if (hit) {
+                    // aynı grupta ise tüm grubu seç
+                    const groupHits = hit.groupId
+                        ? state.elements.filter(x => x.groupId === hit.groupId).map(x => x.id)
+                        : [hit.id];
+                    if (!state.appState.selectedIds.has(hit.id)) {
+                        if (!e.shiftKey) state.appState.selectedIds.clear();
+                        groupHits.forEach(id => state.appState.selectedIds.add(id));
+                    }
+                    pushHistory();
+                    const els = [...state.appState.selectedIds].map(id => state.elements.find(x => x.id === id)).filter(Boolean);
+                    action = { type: 'move', start: pt, origins: els.map(el => ({ el, x: el.x, y: el.y })) };
+                } else {
+                    if (!e.shiftKey) state.appState.selectedIds.clear();
+                    action = { type: 'marquee', start: pt, cur: pt };
+                }
+                render();
+                return;
+            }
+
+            if (tool === 'text') {
+                spawnTextEditor(e.clientX, e.clientY, pt, null);
+                return;
+            }
+
+            // --- yeni şekil oluştur (rectangle/ellipse/diamond/arrow/line/freedraw) ---
+            pushHistory();
+            const el = {
+                id: uid(), type: tool, x: pt.x, y: pt.y, width: 0, height: 0, angle: 0,
+                strokeColor: state.appState.strokeColor,
+                backgroundColor: state.appState.backgroundColor,
+                strokeWidth: state.appState.strokeWidth,
+                roughness: state.appState.roughness,
+                seed: seed(),
+            };
+            if (tool === 'freedraw') el.points = [[0, 0]];
+            state.elements.push(el);
+            action = { type: 'create', el, start: pt };
+        }
+
+        // tutamaç -> imleç eşlemesi (boyutlandırma yönü hissi)
+        const HANDLE_CURSOR = {
+            nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
+            n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', rotate: 'grab',
+        };
+
+        function onMove(e) {
+            if (!action) {
+                // hareket yokken: seçim aracında tutamaç/nesne üstünde imleç ipucu ver
+                if (state.appState.tool === 'select' && !spaceHeld) {
+                    const h = handleAtScreen(e.clientX, e.clientY);
+                    if (h) canvas.style.cursor = HANDLE_CURSOR[h] || 'default';
+                    else canvas.style.cursor = hitTest(toScene(e.clientX, e.clientY)) ? 'move' : 'default';
+                } else {
+                    canvas.style.cursor = '';
+                }
+                return;
+            }
+            const pt = toScene(e.clientX, e.clientY);
+
+            switch (action.type) {
+                case 'pan': {
+                    state.appState.scrollX = action.ox + (e.clientX - action.sx);
+                    state.appState.scrollY = action.oy + (e.clientY - action.sy);
+                    render(); break;
+                }
+                case 'create': {
+                    const el = action.el;
+                    if (el.type === 'freedraw') {
+                        el.points.push([pt.x - el.x, pt.y - el.y]);
+                    } else {
+                        el.width = pt.x - action.start.x;
+                        el.height = pt.y - action.start.y;
+                    }
+                    render(); break;
+                }
+                case 'move': {
+                    const dx = pt.x - action.start.x, dy = pt.y - action.start.y;
+                    for (const o of action.origins) { o.el.x = o.x + dx; o.el.y = o.y + dy; }
+                    render(); break;
+                }
+                case 'resize': { applyResize(action, pt, e.shiftKey); render(); break; }
+                case 'rotate': { applyRotate(action, pt, e.shiftKey); render(); break; }
+                case 'erasing': {
+                    const hit = hitTest(pt);
+                    if (hit) { state.elements = state.elements.filter(el => el !== hit); render(); }
+                    break;
+                }
+                case 'marquee': {
+                    action.cur = pt; render(); drawMarquee(action); break;
+                }
+            }
+        }
+
+        function onUp(e) {
+            if (!action) return;
+            canvas.classList.remove('panning');
+
+            if (action.type === 'create') {
+                const el = action.el;
+                // çok küçük şekil = kaza tıklaması, sil
+                if (el.type !== 'freedraw' && Math.abs(el.width) < 3 && Math.abs(el.height) < 3) {
+                    state.elements = state.elements.filter(x => x !== el);
+                    history.pop();
+                } else {
+                    // Aynı araçta kal (kalem/kare ile çizmeye devam et).
+                    // Seçime otomatik geçmiyoruz; seçim boşta kalsın ki tutamaçlar çizimi engellemesin.
+                    state.appState.selectedIds.clear();
+                }
+            }
+            if (action.type === 'marquee') {
+                selectInMarquee(action);
+            }
+            action = null;
+            render();
+        }
+
+        /* ---- Boyutlandırma ----
+           Model: sürüklenen tutamacın KARŞI köşesi/kenarı sabit "anchor"dır.
+           Yeni bbox = anchor ile fare arasındaki dikdörtgen. Elemanlar eski bbox'tan
+           yeni bbox'a lineer eşlenir. Min boyut ile çökme/ters dönme engellenir. */
+        function applyResize(action, pt, keepAspect) {
+            const { bb, handle, snapshot } = action;
+            const left = handle.includes('w'), right = handle.includes('e');
+            const top = handle.includes('n'), bot = handle.includes('s');
+            const MIN = 8; // en küçük bbox (scene birimi)
+
+            // Sabit kenarlar (anchor): sürüklenmeyen kenarlar eski yerinde kalır.
+            const oldL = bb.x, oldR = bb.x + bb.w, oldT = bb.y, oldB = bb.y + bb.h;
+            let newL = oldL, newR = oldR, newT = oldT, newB = oldB;
+
+            if (left) newL = Math.min(pt.x, oldR - MIN);   // sol kenarı taşı, sağ sabit
+            if (right) newR = Math.max(pt.x, oldL + MIN);   // sağ kenarı taşı, sol sabit
+            if (top) newT = Math.min(pt.y, oldB - MIN);
+            if (bot) newB = Math.max(pt.y, oldT + MIN);
+
+            let sx = (newR - newL) / bb.w;
+            let sy = (newB - newT) / bb.h;
+
+            // Shift = oranı koru (yalnız köşe tutamaçlarında)
+            if (keepAspect && (left || right) && (top || bot)) {
+                const s = Math.max(sx, sy);
+                sx = sy = s;
+                if (left) newL = oldR - bb.w * s;
+                if (right) newR = oldL + bb.w * s;
+                if (top) newT = oldB - bb.h * s;
+                if (bot) newB = oldT + bb.h * s;
+            }
+
+            // ölçekleme sabit noktası = anchor köşesi (sabit kalan kenarların kesişimi)
+            const anchorX = right ? oldL : oldR;   // sağ sürükleniyorsa sol sabit → anchor sol
+            const anchorY = bot ? oldT : oldB;
+
+            for (const { el, orig } of snapshot) {
+                el.x = anchorX + (orig.x - anchorX) * sx;
+                el.y = anchorY + (orig.y - anchorY) * sy;
+                el.width = orig.width * sx;
+                el.height = orig.height * sy;
+                if (orig.points)
+                    el.points = orig.points.map(p => [p[0] * sx, p[1] * sy]);
+                if (orig.type === 'text')
+                    el.fontSize = Math.max(6, orig.fontSize * sy);
+            }
+        }
+
+        /* ---- Döndürme: her elemanın angle'ına ortak merkez etrafında delta ekle ---- */
+        function applyRotate(action, pt, snap) {
+            const { cx, cy, startAng, snapshot } = action;
+            let ang = Math.atan2(pt.y - cy, pt.x - cx) - startAng;
+            if (snap) ang = Math.round(ang / (Math.PI / 12)) * (Math.PI / 12); // 15° adım
+            for (const { el, orig } of snapshot) {
+                el.angle = (orig.angle || 0) + ang;
+                // eleman merkezini ortak merkez etrafında döndür
+                const ocx = orig.x + orig.width / 2, ocy = orig.y + orig.height / 2;
+                const cos = Math.cos(ang), sin = Math.sin(ang);
+                const dx = ocx - cx, dy = ocy - cy;
+                const ncx = cx + dx * cos - dy * sin, ncy = cy + dx * sin + dy * cos;
+                el.x = ncx - orig.width / 2;
+                el.y = ncy - orig.height / 2;
+            }
+        }
+
+        function drawMarquee(a) {
+            const { zoom, scrollX, scrollY } = state.appState;
+            const x1 = Math.min(a.start.x, a.cur.x) * zoom + scrollX;
+            const y1 = Math.min(a.start.y, a.cur.y) * zoom + scrollY;
+            const w = Math.abs(a.cur.x - a.start.x) * zoom, h = Math.abs(a.cur.y - a.start.y) * zoom;
+            ctx.save();
+            ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+            ctx.fillStyle = '#6741d922'; ctx.strokeStyle = '#6741d9';
+            ctx.fillRect(x1, y1, w, h); ctx.strokeRect(x1, y1, w, h);
+            ctx.restore();
+        }
+        function selectInMarquee(a) {
+            const x1 = Math.min(a.start.x, a.cur.x), y1 = Math.min(a.start.y, a.cur.y);
+            const x2 = Math.max(a.start.x, a.cur.x), y2 = Math.max(a.start.y, a.cur.y);
+            const groups = new Set();
+            for (const el of state.elements) {
+                const b = bounds(el);
+                if (b.x >= x1 && b.y >= y1 && b.x + b.w <= x2 && b.y + b.h <= y2) {
+                    state.appState.selectedIds.add(el.id);
+                    if (el.groupId) groups.add(el.groupId);
+                }
+            }
+            // kısmen giren gruplar tam seçilsin
+            if (groups.size)
+                for (const el of state.elements)
+                    if (el.groupId && groups.has(el.groupId)) state.appState.selectedIds.add(el.id);
+        }
+
+        /* metin düzenleyici: canvas üzerine geçici bir textarea koyar */
+        function spawnTextEditor(clientX, clientY, scenePt, existing) {
+            const ta = document.createElement('textarea');
+            const fontSize = existing ? existing.fontSize : 20;
+            Object.assign(ta.style, {
+                position: 'fixed', left: clientX + 'px', top: clientY + 'px',
+                font: `${fontSize * state.appState.zoom}px "Comic Sans MS", cursive`,
+                color: state.appState.strokeColor, background: 'transparent',
+                border: '1px dashed #6741d9', outline: 'none', resize: 'none',
+                minWidth: '40px', minHeight: fontSize + 'px', zIndex: 100, overflow: 'hidden',
+                padding: '0', lineHeight: 1.25,
+            });
+            ta.value = existing ? existing.text : '';
+            document.body.appendChild(ta);
+            ta.focus();
+            const finish = () => {
+                const val = ta.value.trim();
+                ta.remove();
+                if (existing) {
+                    pushHistory();
+                    if (val) existing.text = val;
+                    else state.elements = state.elements.filter(e => e !== existing);
+                } else if (val) {
+                    pushHistory();
+                    state.elements.push({
+                        id: uid(), type: 'text', x: scenePt.x, y: scenePt.y,
+                        width: 0, height: 0, angle: 0, text: val, fontSize,
+                        strokeColor: state.appState.strokeColor,
+                        backgroundColor: 'transparent',
+                        strokeWidth: 1, roughness: 0, seed: seed(),
+                    });
+                }
+                setTool('select');
+                render();
+            };
+            ta.addEventListener('blur', finish);
+            ta.addEventListener('keydown', ev => {
+                if (ev.key === 'Escape') { ta.value = existing ? existing.text : ''; ta.blur(); }
+                if (ev.key === 'Enter' && ev.ctrlKey) ta.blur();
+            });
+        }
+
+        // çift tık: metin düzenle
+        canvas.addEventListener('dblclick', e => {
+            const pt = toScene(e.clientX, e.clientY);
+            const hit = hitTest(pt);
+            if (hit && hit.type === 'text') {
+                // mevcut metni düzenle: geçici olarak kaldırıp editörde aç
+                state.elements = state.elements.filter(x => x !== hit);
+                render();
+                spawnTextEditor(e.clientX, e.clientY, pt, hit);
+            } else if (!hit && (state.appState.tool === 'select' || state.appState.tool === 'text')) {
+                // yalnızca boş alana çift tıklayınca yeni metin başlat (nesne üstünde DEĞİL)
+                spawnTextEditor(e.clientX, e.clientY, pt, null);
+            }
+            // metin dışı bir nesne üstünde çift tık: hiçbir şey yapma (silmez, editör açmaz)
+        });
+
+        /* ---------- ZOOM & PAN (fare tekeri) ---------- */
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            if (e.ctrlKey || e.metaKey) { pan(0, 0); return; }
+            const { zoom } = state.appState;
+            if (e.ctrlKey) return;
+            // trackpad kaydırma vs. tekerlek zoom: burada tekerlek = zoom
+            const delta = -e.deltaY;
+            zoomAt(e.clientX, e.clientY, delta > 0 ? 1.1 : 1 / 1.1);
+        }, { passive: false });
+
+        function zoomAt(cx, cy, factor) {
+            const a = state.appState;
+            const newZoom = Math.min(8, Math.max(0.1, a.zoom * factor));
+            // imleç altındaki scene noktası sabit kalsın
+            const scene = toScene(cx, cy);
+            a.zoom = newZoom;
+            a.scrollX = cx - scene.x * newZoom;
+            a.scrollY = cy - scene.y * newZoom;
+            render();
+        }
+        function pan(dx, dy) { state.appState.scrollX += dx; state.appState.scrollY += dy; render(); }
+
+        /* ---------- ARAÇ ÇUBUĞU ---------- */
+        function setTool(tool) {
+            state.appState.tool = tool;
+            document.querySelectorAll('.tool').forEach(b =>
+                b.classList.toggle('active', b.dataset.tool === tool));
+            document.getElementById('panel').classList.toggle('show',
+                !['select', 'pan', 'eraser'].includes(tool));
+            canvas.className = tool === 'pan' ? 'pan' : '';
+        }
+        document.querySelectorAll('.tool').forEach(btn =>
+            btn.addEventListener('click', () => {
+                if (btn.dataset.tool === 'image') { document.getElementById('imageInput').click(); return; }
+                setTool(btn.dataset.tool);
+            }));
+
+        /* ---------- GÖRSEL YÜKLE ---------- */
+        document.getElementById('imageInput').onchange = e => {
+            const f = e.target.files[0];
+            e.target.value = ''; // aynı dosya tekrar seçilebilsin
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = () => addImageElement(r.result); // base64 data URL
+            r.readAsDataURL(f);
+        };
+
+        function addImageElement(dataUrl) {
+            const img = new Image();
+            img.onload = () => {
+                // ekranın ortasına, en boy oranını koruyarak makul boyutta yerleştir
+                const maxDim = 320;
+                let w = img.naturalWidth, h = img.naturalHeight;
+                const scale = Math.min(maxDim / w, maxDim / h, 1);
+                w *= scale; h *= scale;
+                const center = toScene(innerWidth / 2, innerHeight / 2);
+                const el = {
+                    id: uid(), type: 'image', x: center.x - w / 2, y: center.y - h / 2,
+                    width: w, height: h, angle: 0, src: dataUrl,
+                    strokeColor: '#1e1e1e', backgroundColor: 'transparent',
+                    strokeWidth: 1, roughness: 0, seed: seed(),
+                };
+                imageCache[el.id] = img;
+                pushHistory();
+                state.elements.push(el);
+                state.appState.selectedIds = new Set([el.id]);
+                setTool('select');
+                render();
+            };
+            img.src = dataUrl;
+        }
+
+        // klavye kısayolları
+        window.addEventListener('keydown', e => {
+            if (document.querySelector('textarea')) return; // metin yazarken kısayol yok
+            const map = { v: 'select', r: 'rectangle', d: 'diamond', o: 'ellipse', a: 'arrow', l: 'line', p: 'freedraw', t: 'text', e: 'eraser', h: 'pan' };
+            if (e.key === 'i' || e.key === 'I') { document.getElementById('imageInput').click(); return; }
+            if (e.key === ' ') { spaceHeld = true; canvas.classList.add('pan'); return; }
+            const mod = e.ctrlKey || e.metaKey;
+            if (mod) {
+                const k = e.key.toLowerCase();
+                if (k === 'z') { e.preventDefault(); undo(); return; }
+                if (k === 'c') { e.preventDefault(); copySelection(); return; }
+                if (k === 'v') { e.preventDefault(); pasteClipboard(); return; }
+                if (k === 'd') { e.preventDefault(); duplicateSelection(); return; }
+                if (k === 'a') { e.preventDefault(); selectAll(); return; }
+                if (k === 'g' && !e.shiftKey) { e.preventDefault(); groupSelection(); return; }
+                if (k === 'g' && e.shiftKey) { e.preventDefault(); ungroupSelection(); return; }
+                return; // diğer Ctrl kısayollarını tarayıcıya bırakma ama araç kısayolu da açma
+            }
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (state.appState.selectedIds.size) {
+                    pushHistory();
+                    state.elements = state.elements.filter(el => !state.appState.selectedIds.has(el.id));
+                    state.appState.selectedIds.clear(); render();
+                }
+                return;
+            }
+            if (map[e.key]) setTool(map[e.key]);
+        });
+        window.addEventListener('keyup', e => {
+            if (e.key === ' ') { spaceHeld = false; canvas.classList.remove('pan'); if (state.appState.tool !== 'pan') canvas.className = ''; }
+        });
+
+        /* ---------- KOPYALA / YAPIŞTIR / ÇOĞALT / GRUPLA ---------- */
+        let clipboard = [];   // kopyalanan elemanların derin kopyası
+        let pasteCount = 0;   // arka arkaya yapıştırmada kayma için
+
+        function selectedElements() {
+            return [...state.appState.selectedIds]
+                .map(id => state.elements.find(e => e.id === id)).filter(Boolean);
+        }
+
+        function copySelection() {
+            clipboard = selectedElements().map(el => JSON.parse(JSON.stringify(el)));
+            pasteCount = 0;
+        }
+
+        // kopyalananları yeni id'lerle, kaydırılmış olarak ekle
+        function cloneWithOffset(list, dx, dy) {
+            const groupRemap = {}; // eski groupId -> yeni groupId (grup ilişkisini koru)
+            return list.map(src => {
+                const el = JSON.parse(JSON.stringify(src));
+                el.id = uid();
+                el.x += dx; el.y += dy;
+                if (el.groupId) {
+                    if (!groupRemap[el.groupId]) groupRemap[el.groupId] = uid();
+                    el.groupId = groupRemap[el.groupId];
+                }
+                if (el.type === 'image' && el.src) { // görsel cache'ini de kopyala
+                    const img = new Image(); img.onload = render; img.src = el.src;
+                    imageCache[el.id] = img;
+                }
+                return el;
+            });
+        }
+
+        function pasteClipboard() {
+            if (!clipboard.length) return;
+            pasteCount++;
+            const off = 16 * pasteCount;
+            const clones = cloneWithOffset(clipboard, off, off);
+            pushHistory();
+            state.elements.push(...clones);
+            state.appState.selectedIds = new Set(clones.map(c => c.id));
+            setTool('select'); render();
+        }
+
+        function duplicateSelection() {
+            const sel = selectedElements(); if (!sel.length) return;
+            const clones = cloneWithOffset(sel, 16, 16);
+            pushHistory();
+            state.elements.push(...clones);
+            state.appState.selectedIds = new Set(clones.map(c => c.id));
+            render();
+        }
+
+        function selectAll() {
+            state.appState.selectedIds = new Set(state.elements.map(e => e.id));
+            setTool('select'); render();
+        }
+
+        function groupSelection() {
+            const sel = selectedElements(); if (sel.length < 2) return;
+            const gid = uid();
+            pushHistory();
+            sel.forEach(el => el.groupId = gid);
+            render();
+        }
+
+        function ungroupSelection() {
+            const sel = selectedElements(); if (!sel.length) return;
+            pushHistory();
+            sel.forEach(el => delete el.groupId);
+            render();
+        }
+
+        /* ---------- ÖZELLİK PANELİ ---------- */
+        const STROKES = ['#1e1e1e', '#e03131', '#2f9e44', '#1971c2', '#f08c00', '#9c36b5'];
+        const FILLS = ['transparent', '#ffc9c9', '#b2f2bb', '#a5d8ff', '#ffec99', '#eebefa'];
+        function buildSwatches(containerId, colors, key) {
+            const c = document.getElementById(containerId);
+            colors.forEach(col => {
+                const s = document.createElement('div');
+                s.className = 'swatch';
+                s.style.background = col === 'transparent'
+                    ? 'repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 50%/10px 10px' : col;
+                if (state.appState[key] === col) s.classList.add('active');
+                s.onclick = () => {
+                    state.appState[key] = col;
+                    c.querySelectorAll('.swatch').forEach(x => x.classList.remove('active'));
+                    s.classList.add('active');
+                    applyToSelection();
+                };
+                c.appendChild(s);
+            });
+        }
+        buildSwatches('strokeSwatches', STROKES, 'strokeColor');
+        buildSwatches('fillSwatches', FILLS, 'backgroundColor');
+
+        document.getElementById('strokeWidth').addEventListener('click', e => {
+            if (e.target.dataset.w) {
+                state.appState.strokeWidth = +e.target.dataset.w;
+                seg('strokeWidth', e.target); applyToSelection();
+            }
+        });
+        document.getElementById('roughness').addEventListener('click', e => {
+            if (e.target.dataset.r) {
+                state.appState.roughness = +e.target.dataset.r;
+                seg('roughness', e.target); applyToSelection();
+            }
+        });
+        function seg(id, btn) { document.getElementById(id).querySelectorAll('button').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+
+        // panel değişiklikleri seçili elemanlara da uygulansın
+        function applyToSelection() {
+            if (!state.appState.selectedIds.size) return;
+            pushHistory();
+            for (const id of state.appState.selectedIds) {
+                const el = state.elements.find(e => e.id === id); if (!el) continue;
+                el.strokeColor = state.appState.strokeColor;
+                if (el.type !== 'text') el.backgroundColor = state.appState.backgroundColor;
+                el.strokeWidth = state.appState.strokeWidth;
+                el.roughness = state.appState.roughness;
+            }
+            render();
+        }
+
+        /* ---------- ZOOM BAR ---------- */
+        document.getElementById('zoomIn').onclick = () => zoomAt(innerWidth / 2, innerHeight / 2, 1.2);
+        document.getElementById('zoomOut').onclick = () => zoomAt(innerWidth / 2, innerHeight / 2, 1 / 1.2);
+        document.getElementById('zoomReset').onclick = () => { state.appState.zoom = 1; state.appState.scrollX = 0; state.appState.scrollY = 0; render(); };
+        function updateZoomLabel() { document.getElementById('zoomLvl').textContent = Math.round(state.appState.zoom * 100) + '%'; }
+
+        /* ---------- 5) FILE: kaydet / yükle / PNG ---------- */
+        document.getElementById('btnClear').onclick = () => {
+            if (confirm('Tüm çizim silinsin mi?')) { pushHistory(); state.elements = []; state.appState.selectedIds.clear(); render(); }
+        };
+        document.getElementById('btnSave').onclick = () => {
+            const data = { type: 'aila-whiteboard', version: 1, elements: state.elements, appState: { zoom: state.appState.zoom } };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = 'aila-cizim.excalidraw'; a.click();
+        };
+        document.getElementById('btnLoad').onclick = () => document.getElementById('fileInput').click();
+        document.getElementById('fileInput').onchange = e => {
+            const f = e.target.files[0]; if (!f) return;
+            const r = new FileReader();
+            r.onload = () => {
+                try {
+                    const data = JSON.parse(r.result);
+                    if (Array.isArray(data.elements)) {
+                        pushHistory();
+                        // seed yoksa üret (Excalidraw dosyalarıyla uyumluluk)
+                        state.elements = data.elements.map(el => ({ seed: el.seed ?? seed(), roughness: el.roughness ?? 1, ...el }));
+                        // görselleri cache'e yeniden yükle (src data URL'inden)
+                        for (const el of state.elements)
+                            if (el.type === 'image' && el.src) {
+                                const img = new Image();
+                                img.onload = render;
+                                img.src = el.src;
+                                imageCache[el.id] = img;
+                            }
+                        state.appState.selectedIds.clear();
+                        render();
+                    } else alert('Geçersiz dosya.');
+                } catch { alert('Dosya okunamadı.'); }
+            };
+            r.readAsText(f);
+        };
+        document.getElementById('btnPng').onclick = () => {
+            // Beyaz zeminli PNG: geçici canvas'a önce beyaz doldur, sonra mevcut çizimi bas.
+            const out = document.createElement('canvas');
+            out.width = canvas.width; out.height = canvas.height;
+            const octx = out.getContext('2d');
+            octx.fillStyle = '#ffffff';
+            octx.fillRect(0, 0, out.width, out.height);
+            octx.drawImage(canvas, 0, 0);
+            const link = document.createElement('a');
+            link.download = 'aila-cizim.png';
+            link.href = out.toDataURL('image/png');
+            link.click();
+        };
+
+        /* =========================================================================
+           BASİT YAPAY ZEKA SİMÜLASYON SİSTEMİ
+           ========================================================================= */
+        const aiModal = document.getElementById('aiModal');
+        const aiBody = document.getElementById('aiModalBody');
+        const aiFooter = document.getElementById('aiModalFooter');
+        const aiTitle = document.getElementById('aiModalTitle');
+        const aiToast = document.getElementById('aiToast');
+
+        function showToast(msg) {
+            aiToast.textContent = msg;
+            aiToast.style.display = 'block';
+            setTimeout(() => aiToast.style.display = 'none', 2500);
+        }
+
+        document.getElementById('aiModalClose').onclick = () => aiModal.style.display = 'none';
+
+        function getBoardText() {
+            return state.elements
+                .filter(el => el.type === 'text')
+                .map(el => (el.text || '').toLowerCase())
+                .join(' ');
+        }
+
+        function getTopic() {
+            const txt = getBoardText();
+            if (txt.includes('mitoz') || txt.includes('hücre') || txt.includes('bölünme')) return 'mitoz';
+            if (txt.includes('fotosentez') || txt.includes('klorofil') || txt.includes('yaprak')) return 'fotosentez';
+            if (txt.includes('su döngüsü') || txt.includes('yağmur') || txt.includes('buharlaşma')) return 'sudongusu';
+            if (txt.includes('güneş') || txt.includes('gezegen') || txt.includes('dünya')) return 'gunessistemi';
+            return 'zihinharitasi';
+        }
+
+        const summaries = {
+            mitoz: '<h3>Mitoz Bölünme Özeti</h3><p>Mitoz bölünme, çok hücreli canlılarda büyüme, gelişme ve yaraların onarılmasını sağlar. Tek hücrelilerde ise eşeysiz üremenin temelidir. Bölünme sonucunda kalıtsal yapısı ana hücreyle tamamen aynı 2 yeni hücre oluşur.</p><p><strong>Evreleri:</strong> İnterfaz (Hazırlık), Profaz, Metafaz (Ekvatorda dizilim), Anafaz (Kromatit ayrılması) ve Telofaz evreleridir. Sonrasında sitoplazma bölünmesi (Sitokinez) gerçekleşir.</p>',
+            fotosentez: '<h3>Fotosentez Özeti</h3><p>Fotosentez; klorofilli canlıların ışık enerjisini kullanarak karbondioksit (CO2) ve sudan (H2O) organik besin (glikoz) ve oksijen (O2) sentezlemesi olayıdır.</p><p><strong>Genel Denklem:</strong> Karbondioksit + Su + Işık ➔ Glikoz + Oksijen<br>Işığa bağımlı reaksiyonlar granada (oksijen üretilir), ışıktan bağımsız reaksiyonlar (Calvin döngüsü) ise stromada (glikoz üretilir) gerçekleşir.</p>',
+            sudongusu: '<h3>Su Döngüsü Özeti</h3><p>Su döngüsü (hidrolojik döngü), suyun yeryüzü ile atmosfer arasındaki sürekli hareketidir. Güneş enerjisi suyun buharlaşmasını ve havaya yükselmesini sağlar.</p><p><strong>Aşamaları:</strong> Buharlaşma/Terleme (sıvıdan gaza), Yoğuşma (bulut oluşumu), Yağış (yağmur, kar), Yüzey akışı ve Toprağa sızma (yeraltı suları nehir ve denizleri besler).</p>',
+            gunessistemi: '<h3>Güneş Sistemi Özeti</h3><p>Güneş Sistemi, merkezinde Güneş ve çevresindeki yörüngelerde dolanan 8 gezegenden oluşur. Gezegenler sırasıyla: Merkür, Venüs, Dünya, Mars, Jüpiter, Satürn, Uranüs ve Neptün\'dür.</p><p>Merkür, Venüs, Dünya ve Mars karasal (iç) gezegenler iken, Jüpiter, Satürn, Uranüs ve Neptün gaz devleridir (dış gezegenler).</p>',
+            zihinharitasi: '<h3>Zihin Haritası Analizi</h3><p>Tahtadaki el çizimleriniz görsel bir akıl haritası yapısını andırmaktadır. Zihin haritaları bilgiyi hiyerarşik ve radyal olarak düzenlemenizi sağlar.</p><p><strong>Öneriler:</strong> Merkezi fikri odak noktası yapın, dalları renklendirin ve uzun cümleler yerine anahtar kelimeler ve küçük ikonlar kullanın.</p>'
+        };
+
+        const diagrams = {
+            mitoz: `<svg viewBox="0 0 400 250" style="width:100%; border:1px solid #e4e4e7; border-radius:8px; background:#f8fafc;"><circle cx="100" cy="110" r="40" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/><circle cx="100" cy="110" r="30" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-dasharray="3,3"/><path d="M90 100 L110 120 M110 100 L90 120" stroke="#ef4444" stroke-width="3"/><text x="100" y="180" fill="#1e3a8a" font-family="sans-serif" font-weight="bold" font-size="12" text-anchor="middle">1. PROFAZ</text><circle cx="300" cy="110" r="40" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/><path d="M280 110 H320 M300 90 V130" stroke="#ef4444" stroke-width="3"/><text x="300" y="180" fill="#1e3a8a" font-family="sans-serif" font-weight="bold" font-size="12" text-anchor="middle">2. METAFAZ</text></svg>`,
+            fotosentez: `<svg viewBox="0 0 400 250" style="width:100%; border:1px solid #e4e4e7; border-radius:8px; background:#f8fafc;"><circle cx="80" cy="70" r="25" fill="#f59e0b"/><text x="80" y="74" fill="#fff" font-family="sans-serif" font-weight="bold" font-size="10" text-anchor="middle">IŞIK</text><path d="M150 140 C 180 90, 260 90, 290 140 C 260 190, 180 190, 150 140 Z" fill="#10b981" stroke="#047857" stroke-width="2"/><path d="M120 140 H140" stroke="#3b82f6" stroke-width="3"/><text x="110" y="160" fill="#2563eb" font-family="sans-serif" font-size="10" font-weight="bold">Su</text><path d="M300 140 H330" stroke="#ef4444" stroke-width="3"/><text x="350" y="160" fill="#b91c1c" font-family="sans-serif" font-size="10" font-weight="bold">Oksijen</text></svg>`,
+            sudongusu: `<svg viewBox="0 0 400 250" style="width:100%; border:1px solid #e4e4e7; border-radius:8px; background:#f0f9ff;"><circle cx="340" cy="50" r="20" fill="#f59e0b"/><path d="M40 80 A 10 10 0 0 1 60 80 A 15 15 0 0 1 85 80 A 10 10 0 0 1 100 88 H 40 Z" fill="#fff" stroke="#cbd5e1"/><path d="M50 100 L47 110 M70 100 L67 110 M90 100 L87 110" stroke="#3b82f6" stroke-width="1.5"/><rect y="200" width="400" height="50" fill="#3b82f6"/><path d="M300 180 Q320 130 300 100" stroke="#f59e0b" stroke-width="2" fill="none"/><text x="355" y="140" fill="#d97706" font-family="sans-serif" font-size="9">Buharlaşma</text></svg>`,
+            gunessistemi: `<svg viewBox="0 0 400 250" style="width:100%; border:1px solid #e4e4e7; border-radius:8px; background:#0b0f19;"><circle cx="-40" cy="125" r="90" fill="#f97316" stroke="#facc15" stroke-width="3"/><circle cx="100" cy="125" r="6" fill="#94a3b8"/><circle cx="150" cy="125" r="10" fill="#eab308"/><circle cx="210" cy="125" r="12" fill="#3b82f6"/><circle cx="270" cy="125" r="9" fill="#ef4444"/><circle cx="340" cy="125" r="20" fill="#ca8a04"/><text x="210" y="155" fill="#3b82f6" font-family="sans-serif" font-size="9" text-anchor="middle">Dünya</text></svg>`,
+            zihinharitasi: `<svg viewBox="0 0 400 250" style="width:100%; border:1px solid #e4e4e7; border-radius:8px; background:#fafafa;"><rect x="140" y="100" width="120" height="40" rx="20" fill="#ede9fe" stroke="#6741d9" stroke-width="2"/><text x="200" y="124" fill="#6741d9" font-family="sans-serif" font-weight="bold" font-size="11" text-anchor="middle">ZİHİN HARİTASI</text><path d="M140 120 H80" stroke="#3b82f6" stroke-width="2"/><rect x="20" y="102" width="60" height="30" rx="5" fill="#dbeafe" stroke="#3b82f6"/><text x="50" y="120" fill="#1e3a8a" font-family="sans-serif" font-size="9" text-anchor="middle">Fikirler</text><path d="M260 120 H320" stroke="#10b981" stroke-width="2"/><rect x="320" y="102" width="60" height="30" rx="5" fill="#d1fae5" stroke="#10b981"/><text x="350" y="120" fill="#065f46" font-family="sans-serif" font-size="9" text-anchor="middle">Planlar</text></svg>`
+        };
+
+        const quizzes = {
+            mitoz: [
+                { q: "Mitoz bölünme bittiğinde oluşan iki hücrenin kromozom sayısı hakkında hangisi doğrudur?", a: "Yarıya iner.", b: "İki katına çıkar.", c: "Ana hücre ile aynı kalır.", d: "Yarı yarıya paylaşılır.", ans: "c" },
+                { q: "Kromozomların hücrenin ekvatoral (orta) düzlemine tek sıra halinde dizildiği evre hangisidir?", a: "Profaz", b: "Metafaz", c: "Anafaz", d: "Telofaz", ans: "b" }
+            ],
+            fotosentez: [
+                { q: "Fotosentez sırasında ışık enerjisini soğuran klorofil bitkiye hangi rengi verir?", a: "Kırmızı", b: "Sarı", c: "Yeşil", d: "Mavi", ans: "c" },
+                { q: "Fotosentezin genel denklemine göre reaksiyona giren maddeler hangileridir?", a: "Karbondioksit ve Su", b: "Besin ve Oksijen", c: "Su ve Oksijen", d: "Glikoz ve Karbondioksit", ans: "a" }
+            ],
+            sudongusu: [
+                { q: "Suyun yeryüzünden havaya gaz halinde yükselmesi sürecine ne denir?", a: "Yoğuşma", b: "Buharlaşma", c: "Yağış", d: "Süzülme", ans: "b" },
+                { q: "Bulutların oluşmasını sağlayan fiziksel olay hangisidir?", a: "Erime", b: "Buharlaşma", c: "Yoğuşma", d: "Donma", ans: "c" }
+            ],
+            gunessistemi: [
+                { q: "Güneş'e en yakın gezegen hangisidir?", a: "Merkür", b: "Venüs", c: "Dünya", d: "Mars", ans: "a" },
+                { q: "Güneş Sistemi'ndeki en büyük gezegen hangisidir?", a: "Satürn", b: "Jüpiter", c: "Uranüs", d: "Neptün", ans: "b" }
+            ],
+            zihinharitasi: [
+                { q: "Zihin haritalarında ana konu nereye yerleştirilir?", a: "Sayfanın sol üstüne", b: "Sayfanın en altına", c: "Sayfanın merkezine", d: "Sağ kenara", ans: "c" },
+                { q: "Zihin haritalarının dallarını renklendirmenin temel faydası nedir?", a: "Kağıttan tasarruf etmek", b: "Görsel algıyı ve hatırlamayı artırmak", c: "Daha hızlı yazmak", d: "Sadece dekorasyon", ans: "b" }
+            ]
+        };
+
+        function startSimulation(titleText, renderFunc) {
+            aiTitle.textContent = '✨ Yapay Zeka - ' + titleText;
+            aiModal.style.display = 'flex';
+            aiBody.innerHTML = '<div style="text-align:center; padding:30px;"><div style="font-size:24px; animation: spin 1s infinite linear; display:inline-block; margin-bottom:12px;">⌛</div><p>Tuval görüntüsü yakalandı. Yapay zeka analiz ediyor...</p></div>';
+            aiFooter.innerHTML = '';
+
+            setTimeout(() => {
+                renderFunc();
+            }, 1000);
+        }
+
+        // 1. Özetle
+        document.getElementById('btnAISummary').onclick = () => {
+            startSimulation('Eğitimsel Özet', () => {
+                const topic = getTopic();
+                const content = summaries[topic];
+                aiBody.innerHTML = `<div style="padding:4px;">${content}</div>`;
+
+                aiFooter.innerHTML = `
+                    <button onclick="downloadText('Ozet', '${topic}')">📂 İndir</button>
+                    <button onclick="shareText('Ozet')">🔗 Paylaş</button>
+                    <button class="primary" onclick="saveSummaryToBoard('${topic}')">💾 Tahtaya Ekle</button>
+                `;
+            });
+        };
+
+        // 2. Güzelleştir
+        document.getElementById('btnAIDiagram').onclick = () => {
+            startSimulation('Eğitimsel Şema', () => {
+                const topic = getTopic();
+                const content = diagrams[topic];
+                aiBody.innerHTML = `
+                    <p style="margin-bottom:10px; color:#52525b; font-size:12.5px;">Çizimleriniz analiz edildi ve düzenli bir eğitim şemasına dönüştürüldü:</p>
+                    <div id="diagramWrapper">${content}</div>
+                `;
+
+                aiFooter.innerHTML = `
+                    <button onclick="downloadSvgAsPng('${topic}')">🖼 PNG İndir</button>
+                    <button onclick="shareLink('Sema')">🔗 Paylaş</button>
+                    <button class="primary" onclick="saveDiagramToBoard('${topic}')">💾 Tahtaya Ekle</button>
+                `;
+            });
+        };
+
+        // 3. Sınav Yap
+        document.getElementById('btnAIQuiz').onclick = () => {
+            startSimulation('Konu Sınavı', () => {
+                const topic = getTopic();
+                const qs = quizzes[topic];
+
+                let html = '<p style="color:#52525b; margin-bottom:12px; font-size:12.5px;">Tahtadaki konuya göre 2 soruluk mini testiniz:</p>';
+                qs.forEach((q, idx) => {
+                    html += `
+                        <div class="quiz-q">${idx + 1}. ${q.q}</div>
+                        <div class="quiz-opts" id="qOpts_${idx}">
+                            <button class="quiz-opt" onclick="checkAnswer(this, 'a', '${q.ans}', ${idx})">A) ${q.a}</button>
+                            <button class="quiz-opt" onclick="checkAnswer(this, 'b', '${q.ans}', ${idx})">B) ${q.b}</button>
+                            <button class="quiz-opt" onclick="checkAnswer(this, 'c', '${q.ans}', ${idx})">C) ${q.c}</button>
+                            <button class="quiz-opt" onclick="checkAnswer(this, 'd', '${q.ans}', ${idx})">D) ${q.d}</button>
+                        </div>
+                    `;
+                });
+                aiBody.innerHTML = html;
+
+                aiFooter.innerHTML = `
+                    <button onclick="downloadQuiz('${topic}')">📂 Sınavı İndir</button>
+                    <button onclick="shareLink('Sinav')">🔗 Paylaş</button>
+                    <button class="primary" onclick="saveQuizToBoard('${topic}')">💾 Tahtaya Ekle</button>
+                `;
+            });
+        };
+
+        /* ---- Soru Çözme Mantığı ---- */
+        window.checkAnswer = (btn, selected, correct, qIdx) => {
+            const container = document.getElementById(`qOpts_${qIdx}`);
+            const opts = container.querySelectorAll('.quiz-opt');
+            opts.forEach(opt => opt.disabled = true);
+
+            if (selected === correct) {
+                btn.classList.add('correct');
+                showToast('Tebrikler! Doğru cevap. 🎉');
+            } else {
+                btn.classList.add('incorrect');
+                const correctBtn = Array.from(opts).find(o => o.textContent.toLowerCase().startsWith(correct + ')'));
+                if (correctBtn) correctBtn.classList.add('correct');
+                showToast('Yanlış cevap! Doğru cevap gösterildi.');
+            }
+        };
+
+        /* ---- Aksiyon Fonksiyonları ---- */
+        window.downloadText = (type, topic) => {
+            const el = document.createElement('div');
+            el.innerHTML = summaries[topic];
+            const txt = el.textContent || el.innerText;
+
+            const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `AILA-AI-${type}.txt`;
+            a.click();
+            showToast('Metin dosyası başarıyla indirildi!');
+        };
+
+        window.shareText = (type) => {
+            navigator.clipboard.writeText('AILA Whiteboard yapay zeka tarafından üretilen eğitim özeti.').then(() => {
+                showToast('Paylaşım özeti panoya kopyalandı!');
+            });
+        };
+
+        window.shareLink = (type) => {
+            navigator.clipboard.writeText(`${window.location.href}?ai=${type}`).then(() => {
+                showToast('Paylaşım linki panoya kopyalandı!');
+            });
+        };
+
+        window.downloadSvgAsPng = (topic) => {
+            const svgString = diagrams[topic];
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const reader = new FileReader();
+            reader.onload = () => {
+                const img = new Image();
+                img.onload = () => {
+                    const c = document.createElement('canvas');
+                    c.width = 800; c.height = 500;
+                    const ctxTemp = c.getContext('2d');
+                    ctxTemp.fillStyle = '#ffffff';
+                    ctxTemp.fillRect(0, 0, 800, 500);
+                    ctxTemp.drawImage(img, 0, 0, 800, 500);
+
+                    const a = document.createElement('a');
+                    a.href = c.toDataURL('image/png');
+                    a.download = `AILA-AI-Sema-${topic}.png`;
+                    a.click();
+                    showToast('Şema PNG olarak indirildi!');
+                };
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(svgBlob);
+        };
+
+        window.saveSummaryToBoard = (topic) => {
+            const el = document.createElement('div');
+            el.innerHTML = summaries[topic];
+            const txt = el.textContent || el.innerText;
+
+            const center = toScene(innerWidth / 2, innerHeight / 2);
+            pushHistory();
+            state.elements.push({
+                id: uid(),
+                type: 'text',
+                x: center.x - 180,
+                y: center.y - 100,
+                width: 360,
+                height: 200,
+                angle: 0,
+                text: txt,
+                fontSize: 14,
+                strokeColor: '#6741d9',
+                backgroundColor: 'transparent',
+                strokeWidth: 1,
+                roughness: 0,
+                seed: seed()
+            });
+            render();
+            showToast('Özet metin kutusu olarak tahtaya eklendi!');
+            aiModal.style.display = 'none';
+        };
+
+        window.saveDiagramToBoard = (topic) => {
+            const svgString = diagrams[topic];
+            const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+            addImageElement(svgDataUrl);
+            showToast('Eğitimsel şema resim olarak tahtaya eklendi!');
+            aiModal.style.display = 'none';
+        };
+
+        window.saveQuizToBoard = (topic) => {
+            const qs = quizzes[topic];
+            let txt = `[AI KONU SINAVI: ${topic.toUpperCase()}]\n\n`;
+            qs.forEach((q, idx) => {
+                txt += `${idx + 1}. ${q.q}\n  A) ${q.a}\n  B) ${q.b}\n  C) ${q.c}\n  D) ${q.d}\n  Cevap: ${q.ans.toUpperCase()}\n\n`;
+            });
+
+            const center = toScene(innerWidth / 2, innerHeight / 2);
+            pushHistory();
+            state.elements.push({
+                id: uid(),
+                type: 'text',
+                x: center.x - 200,
+                y: center.y - 120,
+                width: 400,
+                height: 240,
+                angle: 0,
+                text: txt,
+                fontSize: 13,
+                strokeColor: '#1e1e1e',
+                backgroundColor: 'transparent',
+                strokeWidth: 1,
+                roughness: 0,
+                seed: seed()
+            });
+            render();
+            showToast('Soru seti tahtaya metin olarak eklendi!');
+            aiModal.style.display = 'none';
+        };
+
+        window.downloadQuiz = (topic) => {
+            const qs = quizzes[topic];
+            let txt = `AILA AI KONU SINAVI - ${topic.toUpperCase()}\n\n`;
+            qs.forEach((q, idx) => {
+                txt += `${idx + 1}. ${q.q}\nA) ${q.a}\nB) ${q.b}\nC) ${q.c}\nD) ${q.d}\nCevap: ${q.ans.toUpperCase()}\n\n`;
+            });
+
+            const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `AILA-AI-Sinav-${topic}.txt`;
+            a.click();
+            showToast('Sınav metin dosyası olarak indirildi!');
+        };
+
+        /* ---------- BAŞLAT ---------- */
+        window.addEventListener('resize', resize);
+        resize();
+        setTool('select');
+    </script>
+</body>
+
+</html>
